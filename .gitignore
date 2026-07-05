@@ -1,0 +1,12 @@
+# Zugangsdaten – niemals committen!
+.env
+
+# Lokale Daten und Ausgaben
+jobs_gesehen.db
+jobs_ranked.csv
+jobs_report.html
+lauf.log
+
+# Python
+__pycache__/
+*.pyc
