@@ -2,9 +2,9 @@
 """
 Job Scout – findet und priorisiert Stellenanzeigen passend zum eigenen Profil.
 
-Quelle (v1): Bundesagentur für Arbeit – Jobsuche-API (offiziell, kostenlos,
-keine Registrierung nötig). Weitere Quellen (Adzuna, Jooble) lassen sich
-als zusätzliche Fetcher-Funktionen ergänzen.
+Quellen: Bundesagentur für Arbeit, Arbeitnow, Adzuna, Himalayas (alle
+offiziell/öffentlich, kein Scraping). Weitere Quellen lassen sich als
+zusätzliche Fetcher-Funktionen ergänzen.
 
 Nutzung:
     pip install requests
@@ -66,11 +66,14 @@ PROFIL = {
     "umkreis_km": 50,
     # Auch bundesweit nach Remote-Stellen suchen?
     "remote_suche": True,
+    # Länderfilter für die Himalayas-Suche (liefert Landes- + Weltweit-Treffer)
+    "himalayas_land": "Germany",
     # Quellen an-/abschalten
     "quellen": {
         "arbeitsagentur": True,
         "arbeitnow": True,
         "adzuna": True,  # benötigt ADZUNA_APP_ID + ADZUNA_APP_KEY in .env
+        "himalayas": True,  # kostenlos, kein API-Key nötig, reine Remote-Jobs
     },
     # Für die besten N BA-Treffer die Beschreibung nachladen (0 = aus)
     "ba_details_top_n": 40,
@@ -326,7 +329,66 @@ def fetch_adzuna(was: str, wo: str | None, umkreis_km: int | None,
 
 
 # ============================================================
-# 3d. BA-DETAILS – Beschreibung für Top-Treffer nachladen
+# 3d. FETCHER – Himalayas (kostenlos, kein API-Key, Remote-Jobs)
+# ============================================================
+
+HIMALAYAS_URL = "https://himalayas.app/jobs/api/search"
+
+
+def fetch_himalayas(was: str, land: str | None = "Germany",
+                    max_seiten: int = 2) -> list[Job]:
+    """Fragt die offizielle Himalayas-Remote-Jobs-API ab (kein API-Key nötig).
+
+    Der 'country'-Filter der API liefert laut Dokumentation sowohl
+    landesspezifische als auch uneingeschränkte ('worldwide') Treffer –
+    ein Aufruf pro Suchbegriff deckt damit automatisch auch Remote-Stellen
+    ab, die für Bewerber aus 'land' offen sind, ohne eine zweite Abfrage
+    zu benötigen. Alle Himalayas-Stellen sind per Definition remote.
+    """
+    jobs = []
+    for seite in range(1, max_seiten + 1):
+        params = {"q": was, "limit": 20, "page": seite}
+        if land:
+            params["country"] = land
+
+        try:
+            r = requests.get(HIMALAYAS_URL, params=params, timeout=15)
+            r.raise_for_status()
+        except requests.RequestException as e:
+            print(f"  [WARN] Himalayas-Fehler bei '{was}' (Seite {seite}): {e}",
+                  file=sys.stderr)
+            break
+
+        daten = r.json()
+        eintraege = daten.get("jobs", [])
+        if not eintraege:
+            break
+
+        for a in eintraege:
+            restr = a.get("locationRestrictions") or []
+            ts = a.get("pubDate")
+            datum = (datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                     if ts else "")
+            jobs.append(Job(
+                titel=a.get("title", ""),
+                firma=a.get("companyName", "unbekannt"),
+                ort=", ".join(restr) if restr else "Weltweit (Remote)",
+                veroeffentlicht=datum,
+                url=a.get("applicationLink") or a.get("guid", ""),
+                quelle="Himalayas",
+                remote=True,  # Himalayas listet ausschließlich Remote-Stellen
+                beschreibung=re.sub(
+                    r"<[^>]+>", " ",
+                    a.get("description") or a.get("excerpt") or "")[:3000],
+            ))
+
+        if len(eintraege) < params["limit"]:
+            break  # letzte Seite erreicht
+    return jobs
+
+
+# ============================================================
+# 3e. BA-DETAILS – Beschreibung für Top-Treffer nachladen
 # ============================================================
 
 BA_DETAIL_URL = ("https://rest.arbeitsagentur.de/jobboerse/"
@@ -357,7 +419,7 @@ def lade_ba_beschreibung(job: Job) -> bool:
 
 
 # ============================================================
-# 3e. GESEHEN-SPEICHER – SQLite merkt sich jede Stelle
+# 3f. GESEHEN-SPEICHER – SQLite merkt sich jede Stelle
 # ============================================================
 
 DB_PFAD = "jobs_gesehen.db"
@@ -604,6 +666,12 @@ def main():
                 for job in fetch_adzuna(f"{begriff} remote", wo=None,
                                         umkreis_km=None):
                     alle.setdefault(job.key, job)
+
+        if q.get("himalayas"):
+            print(f"[Himalayas] Suche: '{begriff}'...")
+            for job in fetch_himalayas(begriff,
+                                       land=PROFIL.get("himalayas_land")):
+                alle.setdefault(job.key, job)
 
     if q.get("arbeitnow"):
         print("[Arbeitnow] Lade aktuelle Stellen (Filter über Scoring)...")

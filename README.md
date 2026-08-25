@@ -12,8 +12,9 @@ Stellenanzeigen statt Leads.
 
 ## Features
 
-- **3 Datenquellen:** Bundesagentur für Arbeit (offizielle Jobsuche-API),
-  Adzuna, Arbeitnow – erweiterbar über das Fetcher-Pattern
+- **4 Datenquellen:** Bundesagentur für Arbeit (offizielle Jobsuche-API),
+  Adzuna, Arbeitnow, Himalayas (globale Remote-Jobs, kein API-Key nötig) –
+  erweiterbar über das Fetcher-Pattern
 - **Regelbasiertes Scoring (0–100):** gewichtete Titel- und Kontext-Keywords,
   Remote-/Standort-Boni, Frische-Bonus, Malus- und Ausschlussregeln
 - **Wortgrenzen-Matching:** kurze Keywords wie „KI" erzeugen keine
