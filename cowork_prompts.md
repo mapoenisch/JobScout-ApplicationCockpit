@@ -1,8 +1,20 @@
 # Cowork-Prompts für das Job-Scout-System
 
 Drei Prompts für dein Cowork-Projekt. Prompt 1 ersetzt deine bestehende
-geplante Aufgabe (2× wöchentlich). Prompt 2 richtest du als neue geplante
+geplante Aufgabe (jeden Montag). Prompt 2 richtest du als neue geplante
 Aufgabe ein (monatlich). Prompt 3 nutzt du manuell bei Bedarf.
+
+Hinweis: Der Ordner heißt auf der Platte tatsächlich " job-scout" mit
+führendem Leerzeichen (alter Tippfehler bei der Erstellung). Cowork ist
+korrekt darauf verknüpft, nur bei manuellen Terminal-Befehlen das
+Leerzeichen nicht vergessen.
+
+Seit 06.07.2026 läuft job_scout.py automatisch lokal per launchd
+(Mo + Do, 7:30 Uhr, LaunchAgent com.marcpoenisch.jobscout) – Grund:
+die Cowork-Sandbox blockt bei geplanten Aufgaben rohen Netzwerkzugriff
+und hat keine zuverlässigen Datei-Locks für die SQLite-DB. Cowork liest
+in Prompt 1 daher nur noch die bereits frische jobs_ranked.csv, statt
+das Skript selbst zu starten.
 
 Voraussetzungen im Ordner /Users/marcpoenisch/Documents/job-scout:
 - Lebenslauf_Master.docx (dein vollständiger, aktueller Lebenslauf)
@@ -11,68 +23,45 @@ Voraussetzungen im Ordner /Users/marcpoenisch/Documents/job-scout:
 
 ---
 
-## PROMPT 1 – Bewerbungs-Workflow (geplante Aufgabe, 2× wöchentlich)
+## PROMPT 1 – Bewerbungs-Workflow (Ausführung jeden Montag)
 
 Führe im Ordner /Users/marcpoenisch/Documents/job-scout folgende Schritte aus:
 
-0. Öffne bewerbungen_tracker.csv. Prüfe: Gibt es Zeilen mit Status
-   "beworben", deren "Beworben am" länger als 12 Tage zurückliegt und bei
-   denen "Ergebnis" leer ist? Falls ja, liste mir diese Firmen zu Beginn
-   als FOLLOW-UP-ERINNERUNG auf und setze ihren Status auf "follow-up".
+* Öffne bewerbungen_tracker.csv. 
 
-1. Starte "python3 job_scout.py" und warte, bis der Lauf abgeschlossen ist.
+* Prüfe: Gibt es Zeilen mit Status "beworben", deren "Beworben am" länger als 12 Tage zurückliegt und bei denen "Ergebnis" leer ist?
 
-2. Lies jobs_ranked.csv und zeige mir die NEUEN Stellen mit Score >= 50 als
-   nummerierte Kurzliste (Titel, Firma, Ort, Score, Link), maximal die
-   besten 15. Gibt es keine neuen Stellen >= 50, zeige die Top 5 des Tages.
-   Überspringe Firmen, die bereits im Tracker stehen, und weise mich
-   darauf hin.
+* Falls ja, liste mir diese Firmen zu Beginn als FOLLOW-UP-ERINNERUNG auf und setze ihren Status auf "follow-up".
 
-3. Frage mich, auf welche Stellen ich mich bewerben möchte, und WARTE auf
-   meine Antwort. Ohne meine Auswahl passiert nichts Weiteres.
+* Lies jobs_ranked.csv und zeige mir die NEUEN Stellen mit Score >= 50 als nummerierte Kurzliste (Titel, Firma, Ort, Score, Link), maximal die besten 15. 
 
-4. Rufe für jede gewählte Stelle die Stellenausschreibung über den Link ab
-   und lies Anforderungen und Qualifikationen. Achte dabei auch auf Tonfall
-   und Sprachstil der Anzeige (z. B. förmlich vs. locker, nüchtern vs.
-   emotional, kurze vs. ausschweifende Sätze, Buzzwords der Firma). Falls
-   eine Seite nicht abrufbar ist, sag mir das und bitte mich, den Text
-   einzufügen.
+* Gibt es keine neuen Stellen >= 50, zeige die Top 5 des Tages.
 
-   Rufe zusätzlich die Firmen-Homepage auf (About-/Karriere-/Über-uns-
-   Seite) und erfasse: Produkte/Dienstleistungen, Zielgruppe, erkennbare
-   Werte oder Unternehmenskultur, Besonderheiten, mit denen sich das
-   Anschreiben von einer 08/15-Bewerbung abheben kann. Falls die Homepage
-   nicht eindeutig auffindbar oder nicht abrufbar ist, überspringe diesen
-   Punkt und sag mir kurz Bescheid statt zu raten.
+* Überspringe Firmen, die bereits im Tracker stehen, und weise mich darauf hin.
 
-5. Erstelle pro Stelle auf Basis von Lebenslauf_Master.docx:
-   a) einen angepassten Lebenslauf: nur vorhandene Fakten umformulieren,
-      priorisieren und auf die Anforderungen ausrichten. STRIKT: nichts
-      erfinden, keine Fähigkeiten, Erfahrungen oder Zeiträume hinzudichten.
-   b) ein individuelles Anschreiben (max. 1 Seite, Deutsch, Du-Form nur
-      wenn die Anzeige duzt, sonst Sie): Bezug auf konkrete Anforderungen
-      der Stelle, mein Profil als Quereinsteiger mit Groß- und
-      Außenhandels-Background und Weiterbildung Digital Sales Manager.
-      Tonfall und Wortwahl an die Stellenausschreibung anlehnen (siehe
-      Schritt 4) – nicht die Anzeige nachahmen oder Formulierungen
-      übernehmen, sondern denselben Registerwechsel treffen (z. B. bei
-      einer lockeren Startup-Anzeige entsprechend direkter und
-      persönlicher schreiben als bei einer klassisch-förmlichen
-      Konzern-Anzeige). Mindestens einen konkreten Bezug zum Unternehmen
-      aus der Homepage-Recherche einbauen (z. B. Produkt, Zielgruppe oder
-      erkennbarer Wert) – nur wenn die Recherche in Schritt 4 etwas
-      Belastbares ergeben hat, sonst diesen Punkt auslassen statt etwas
-      zu erfinden.
+* Frage mich, auf welche Stellen ich mich bewerben möchte, und WARTE auf meine Antwort. Ohne meine Auswahl passiert nichts Weiteres.
 
-6. Speichere pro Stelle zwei Word-Dateien im Unterordner "bewerbungen":
-   Lebenslauf_[Firma].docx und Anschreiben_[Firma].docx
 
-7. Trage jede erstellte Bewerbung als neue Zeile in
-   bewerbungen_tracker.csv ein: Firma, Position, Link, Status
-   "vorbereitet", Erstellt am = heutiges Datum. Übrige Felder leer lassen.
 
-8. Gib mir am Ende eine Liste der erstellten Dateien und weise mich auf
-   Stellen hin, bei denen mein Profil Lücken zu den Anforderungen hat.
+* Rufe für jede gewählte Stelle die Stellenausschreibung über den Link ab und lies Anforderungen und Qualifikationen. Achte dabei auch auf Tonfall und Sprachstil der Anzeige (z.B. förmlich vs. locker, nüchtern vs. emotional, kurze vs. ausschweifende Sätze, Buzzwords der Firma).
+
+*Falls eine Seite nicht abrufbar ist, sag mir das und bitte mich, den Text einzufügen.
+
+*Rufe zusätzlich die Firmen-Homepage auf (About-/Karriere-/Über-uns-Seite) und erfasse: Produkte/Dienstleistungen, Zielgruppe, erkennbare Werte oder Unternehmenskultur, Besonderheiten, mit denen sich das Anschreiben von einer 08/15-Bewerbung abheben kann. *Falls die Homepage nicht eindeutig auffindbar oder nicht abrufbar ist, überspringe diesen Punkt und sag mir kurz Bescheid statt zu raten.
+
+* Erstelle pro Stelle auf Basis von Lebenslauf_Master.docx:
+
+a) einen angepassten Lebenslauf: nur vorhandene Fakten umformulieren, priorisieren und auf die Anforderungen ausrichten. STRIKT: nichts erfinden, keine Fähigkeiten, Erfahrungen oder Zeiträume hinzudichten.
+
+b) ein individuelles Anschreiben (max. 1 Seite, Deutsch, Sie-Form): Bezug auf konkrete Anforderungen der Stelle, mein Profil als Quereinsteiger mit Groß- und Außenhandels-Background und Weiterbildung Digital Sales Manager. Tonfall und Wortwahl an die Stellenausschreibung anlehnen (siehe Schritt 4) – nicht die Anzeige nachahmen oder Formulierungen übernehmen, sondern denselben Registerwechsel treffen (z. B. bei einer lockeren Startup-Anzeige entsprechend direkter und persönlicher schreiben als bei einer klassisch-förmlichen Konzern-Anzeige). Mindestens einen konkreten Bezug zum Unternehmen aus der Homepage-Recherche einbauen (z. B. Produkt, Zielgruppe oder erkennbarer Wert) – nur wenn die Recherche in Schritt 4 etwas Belastbares ergeben hat, sonst diesen Punkt auslassen statt etwas zu erfinden.
+
+* Speichere pro Stelle zwei Word-Dateien im Unterordner "bewerbungen": Lebenslauf_[Firma].docx und Anschreiben_[Firma].docx
+
+* Trage jede erstellte Bewerbung als neue Zeile in bewerbungen_tracker.csv ein: Firma, Position, Link, Status "vorbereitet", Erstellt am = heutiges Datum.
+
+* Übrige Felder leer lassen.
+
+* Gib mir am Ende eine Liste der erstellten Dateien und weise mich auf Stellen hin, bei denen mein Profil Lücken zu den Anforderungen hat.
 
 Hinweis für mich (nicht Teil der Aufgabe): Sobald ich eine Bewerbung
 tatsächlich abgeschickt habe, sage ich Claude Bescheid ("Bewerbung bei X
