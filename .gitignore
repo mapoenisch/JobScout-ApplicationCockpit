@@ -10,3 +10,7 @@ lauf.log
 # Python
 __pycache__/
 *.pyc
+
+# macOS / Backups
+.DS_Store
+*.bak
