@@ -1,0 +1,18 @@
+Führe im Ordner /Users/marcpoenisch/Documents/Projekte/JobScout folgende Schritte aus:
+
+1. Starte "python3 skill_radar.py" und warte auf das Ergebnis.
+
+2. Lies skill_report.html und fasse mir zusammen:
+   - die Top-5-Lücken (Skills, die ich nicht habe, sortiert nach Marktnachfrage in Prozent)
+   - auffällige Trends (Skills mit deutlich steigender oder fallender Nachfrage gegenüber dem letzten Lauf)
+
+3. Recherchiere für die Top-3-Lücken passende Zertifizierungen, Qualifizierungen und Kurse im Internet. Prioritätenreihenfolge:
+   a) kostenlos (z. B. HubSpot Academy, Salesforce Trailhead, Google Zertifikate, LinkedIn Learning über den Bibliotheksausweis der Leipziger Städtischen Bibliotheken)
+   b) günstig unter 100 Euro (z. B. Udemy-Kurse in Aktionszeiträumen)
+   c) förderfähig über die Arbeitsagentur (Bildungsgutschein, Weiterbildungsförderung) – nur wenn a) und b) nichts hergeben
+
+4. Prüfe je Empfehlung: Anbieter seriös? Zertifikat mit Aussagekraft für Recruiter (anerkanntes Badge/Zertifikat zum Verlinken auf LinkedIn)? Zeitaufwand realistisch neben Weiterbildung und Bewerbungsphase (max. ca. 3-5 Std./Woche)?
+
+5. Erstelle eine Empfehlungs-Notiz als Markdown-Datei kurs_empfehlungen_[JAHR-MONAT].md mit: je Lücke 1-2 konkrete Kurse (Name, Anbieter, Kosten, Dauer, Link, welches Zertifikat es gibt, welche Lücke es schließt) und einer klaren Empfehlung, womit ich diesen Monat starten soll. Kennzeichne Fakten und Einschätzungen getrennt.
+
+6. Wichtig: Empfiehl nur, was echte Marktnachfrage aus dem Radar abdeckt. Keine Kurs-Sammelwut – maximal 1 aktiver Kurs parallel zur laufenden Weiterbildung.

@@ -7,16 +7,16 @@
         <mxCell id="title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;" value="Job Scout - Automatisierungs-Workflow" vertex="1">
           <mxGeometry height="40" width="700" x="-1.4210854715202004e-14" y="-100" as="geometry" />
         </mxCell>
-        <mxCell id="colA" parent="1" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#6C8EBF,#FFFFFF);" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;Bewerbungs-Workflow (2x wö&lt;/font&gt;&lt;span style=&quot;font-size: 18px; background-color: transparent; color: light-dark(rgb(108, 142, 191), rgb(255, 255, 255));&quot;&gt;chentlich)&lt;/span&gt;" vertex="1">
+        <mxCell id="colA" parent="1" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#6C8EBF,#FFFFFF);" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;Bewerbungs-Workflow (manuell)&lt;/font&gt;" vertex="1">
           <mxGeometry height="30" width="370" x="359.03999999999996" y="690" as="geometry" />
         </mxCell>
         <mxCell id="colB" parent="1" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;fontColor=#6c8ebf;" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;Interviewvorbereitung (bei Bedarf)&lt;/font&gt;" vertex="1">
           <mxGeometry height="30" width="280" x="1230" y="1450" as="geometry" />
         </mxCell>
-        <mxCell id="colC" parent="1" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;fontColor=#6c8ebf;" value="&lt;font style=&quot;font-size: 18px; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Karriereentwicklung (monatlich)&lt;/font&gt;" vertex="1">
+        <mxCell id="colC" parent="1" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;fontColor=#6c8ebf;" value="&lt;font style=&quot;font-size: 18px; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Karriereentwicklung (manuell)&lt;/font&gt;" vertex="1">
           <mxGeometry height="30" width="280" x="-177.46" y="1301" as="geometry" />
         </mxCell>
-        <mxCell id="a1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Trigger: Cowork-Aufgabe startet 2x woechentlich&lt;/font&gt;" vertex="1">
+        <mxCell id="a1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Trigger: Cowork-Aufgabe startet manuell (ich klicke)&lt;/font&gt;" vertex="1">
           <mxGeometry height="60" width="240" x="424.04" y="789.9999999999999" as="geometry" />
         </mxCell>
         <mxCell id="a2" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Tracker prüfen:&lt;/b&gt;&amp;nbsp;&lt;div&gt;Bewerbung(en) länger als 12 Tage&amp;nbsp;&lt;/div&gt;&lt;div&gt;ohne Antwort?&lt;/div&gt;" vertex="1">
@@ -25,8 +25,8 @@
         <mxCell id="a3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="Follow-up-Erinnerung anzeigen&amp;nbsp;&lt;div&gt;+&amp;nbsp;&lt;div&gt;Status auf &#39;follow-up&#39; setzen&lt;/div&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="80" width="240" x="90.00000000000003" y="1075" as="geometry" />
         </mxCell>
-        <mxCell id="a4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;job_scout.py:&lt;/b&gt; Jobsuche über&amp;nbsp;&lt;div&gt;Arbeitsagentur, Adzuna, Arbeitnow&lt;/div&gt;" vertex="1">
-          <mxGeometry height="90" width="240" x="255.87000000000003" y="1241" as="geometry" />
+        <mxCell id="a4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;job_scout.py&lt;/b&gt; (l&#228;uft automatisch per launchd,&amp;nbsp;&lt;div&gt;Mo+Do 7:30 Uhr - unabh&#228;ngig vom Cowork-Trigger)&lt;/div&gt;&lt;div&gt;Jobsuche &#252;ber Arbeitsagentur, Adzuna, Arbeitnow, Himalayas&lt;/div&gt;" vertex="1">
+          <mxGeometry height="122" width="240" x="255.87000000000003" y="1241" as="geometry" />
         </mxCell>
         <mxCell id="a5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Abgleich Keywords: Rollen, Skills, Ort, Arbeitsmodell + Scoring 0-100" vertex="1">
           <mxGeometry height="100" width="240" x="255.87000000000003" y="1369.33" as="geometry" />
@@ -82,7 +82,7 @@
         <mxCell id="b5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Tracker-Update: Status &#39;interview&#39;" vertex="1">
           <mxGeometry height="70" width="240" x="371" y="3338" as="geometry" />
         </mxCell>
-        <mxCell id="c1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Trigger: Cowork-Aufgabe&amp;nbsp;&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;font-size: 14px;&quot;&gt;startet monatlich&lt;/font&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="c1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Trigger: Cowork-Aufgabe&amp;nbsp;&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;font-size: 14px;&quot;&gt;startet manuell (ich klicke)&lt;/font&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="60" width="240" x="-157.46" y="1409.33" as="geometry" />
         </mxCell>
         <mxCell id="c2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;skill_radar.py:&lt;/b&gt; gesammelte Stellenbeschreibungen auswerten" vertex="1">
@@ -236,7 +236,7 @@
             <mxPoint x="698.46" y="2728" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_a17_a2" edge="1" parent="1" source="a17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;curved=0;exitX=0.75;exitY=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;labelBorderColor=default;labelPadding=2;exitDx=0;exitDy=0;" target="a2" value="nä&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;chster Lauf&amp;nbsp;&lt;/span&gt;&lt;div&gt;&lt;div&gt;in 3-4 Tagen&lt;/div&gt;&lt;/div&gt;">
+        <mxCell id="e_a17_a2" edge="1" parent="1" source="a17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;curved=0;exitX=0.75;exitY=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;labelBorderColor=default;labelPadding=2;exitDx=0;exitDy=0;" target="a2" value="nä&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;chster Lauf&amp;nbsp;&lt;/span&gt;&lt;div&gt;&lt;div&gt;kein fester Termin&lt;/div&gt;&lt;/div&gt;">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_b1_b2" edge="1" parent="1" source="b1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;curved=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="b2">
