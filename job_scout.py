@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import csv
 import html
+import json
 import os
 import re
 import sqlite3
@@ -60,6 +61,9 @@ PROFIL = {
         "Vertriebsinnendienst SaaS",
         "Business Development Representative",
         "Digital Sales",
+        "Account Manager",
+        "Kundenberater",
+        "Customer Success Manager",
     ],
     # Wunsch-Standort + Umkreis in km (für Vor-Ort-/Hybrid-Stellen)
     "ort": "Leipzig",
@@ -85,40 +89,54 @@ PROFIL = {
 SCORE_REGELN = {
     "titel_keywords": {
         # keyword (kleingeschrieben): punkte
-        "sales development": 30,
-        "sdr": 30,
-        "sdm": 25,
-        "business development representative": 25,
-        "bdr": 25,
+        # SDR/BDR bewusst niedriger: ok, wenn inbound-lastig (siehe text_keywords/malus),
+        # aber kein automatischer Top-Score mehr allein über den Titel.
+        "sales development": 20,
+        "sdr": 20,
+        "sdm": 18,
+        "business development representative": 16,
+        "bdr": 16,
         "inside sales": 25,
-        "vertriebsinnendienst": 20,
+        "vertriebsinnendienst": 22,
         "digital sales": 20,
-        "customer success": 18,
-        "account executive": 15,
-        "account manager": 12,
+        "customer success": 26,
+        "account executive": 22,
+        "account manager": 24,
+        "kundenberater": 24,
         "sales manager": 8,
     },
     "text_keywords": {
         "saas": 15,
-        "hubspot": 12,
-        "salesforce": 12,
+        "hubspot": 14,
+        "salesforce": 14,
         "linkedin sales navigator": 12,
         "chatgpt": 10,
         "claude": 10,
         "quereinsteiger": 10,
-        "ki": 8,
-        "künstliche intelligenz": 8,
+        "inbound": 10,
+        "bestandskunden": 10,
+        # KI/AI: "ki"/"ai" matchen dank Wortgrenzen-Regex bereits alle
+        # Schreibweisen wie "KI-Tools", "KI-gestützt", "AI-powered" etc.
+        "ki": 10,
+        "künstliche intelligenz": 10,
+        "microsoft 365": 10,
+        "office 365": 10,
+        "m365": 8,
         "crm": 8,
         "b2b": 8,
-        "ai": 6,
+        "ai": 8,
         "e-commerce": 6,
         "tech": 4,
     },
     # Abwertung (Stelle bleibt drin, rutscht aber nach unten)
     "malus_keywords": {
-        "kaltakquise": -8,
-        "hunter": -8,
-        "cold calling": -6,
+        "kaltakquise": -18,
+        "cold calling": -15,
+        "hunter": -15,
+        "outbound": -12,
+        "ote": -10,
+        "uncapped commission": -12,
+        "provisionsbasiert": -10,
     },
     # Abwertung nur bei Treffern im Titel (nicht in der Beschreibung)
     "titel_malus_keywords": {
@@ -129,7 +147,14 @@ SCORE_REGELN = {
         "director": -25,
     },
     "remote_bonus": 20,          # Stelle ist (teilweise) remote
-    "leipzig_bonus": 15,         # Arbeitsort Leipzig/Umgebung
+    # Lokal = genauso viel wert wie Remote (Leipzig, Leipziger Land, Halle,
+    # Schkeuditz und nähere Umgebung)
+    "lokale_orte": [
+        "leipzig", "halle", "schkeuditz", "markkleeberg", "borna", "wurzen",
+        "grimma", "delitzsch", "taucha", "naunhof", "böhlen", "zwenkau",
+        "markranstädt",
+    ],
+    "lokal_bonus": 20,
     "frische_bonus_max": 10,     # max. Bonus für sehr neue Anzeigen
     "frische_tage": 14,          # innerhalb dieser Frist gibt es Frische-Bonus
     # Ausschlusskriterien: Treffer → Stelle fliegt raus
@@ -173,13 +198,19 @@ class Job:
 # 3. FETCHER – Bundesagentur für Arbeit
 # ============================================================
 
-BA_URL = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs"
+BA_URL = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
 BA_HEADERS = {"X-API-Key": "jobboerse-jobsuche"}  # öffentlicher Key der BA
+
+# Die BA hat den Such-Endpoint von v4 auf v6 umgestellt (Stand 08/2026) und dabei
+# alle Feldnamen geändert (v4: stellenangebote/titel/arbeitgeber/refnr/arbeitsort;
+# v6: ergebnisliste/stellenangebotsTitel/firma/referenznummer/stellenlokationen).
+# Der Detail-Endpoint (jobdetails) blieb auf v4 und lieferte weiter 200 -- nur der
+# Such-Endpoint gab mit den alten Feldern/URL einen 403 zurück.
 
 
 def fetch_arbeitsagentur(was: str, wo: str | None, umkreis: int | None,
                          nur_remote: bool = False, max_seiten: int = 3) -> list[Job]:
-    """Fragt die BA-Jobsuche-API ab und liefert Job-Objekte zurück."""
+    """Fragt die BA-Jobsuche-API (v6) ab und liefert Job-Objekte zurück."""
     jobs = []
     for seite in range(1, max_seiten + 1):
         params = {
@@ -203,17 +234,20 @@ def fetch_arbeitsagentur(was: str, wo: str | None, umkreis: int | None,
             break
 
         data = r.json()
-        angebote = data.get("stellenangebote", [])
+        angebote = data.get("ergebnisliste", [])
         if not angebote:
             break
 
         for a in angebote:
-            ref = a.get("refnr", "")
+            ref = a.get("referenznummer", "")
+            lokationen = a.get("stellenlokationen") or []
+            ort = (lokationen[0].get("adresse", {}).get("ort", "")
+                   if lokationen else "")
             jobs.append(Job(
-                titel=a.get("titel") or a.get("beruf", ""),
-                firma=a.get("arbeitgeber", "unbekannt"),
-                ort=(a.get("arbeitsort") or {}).get("ort", ""),
-                veroeffentlicht=a.get("aktuelleVeroeffentlichungsdatum", ""),
+                titel=a.get("stellenangebotsTitel") or a.get("hauptberuf", ""),
+                firma=a.get("firma", "unbekannt"),
+                ort=ort,
+                veroeffentlicht=a.get("datumErsteVeroeffentlichung", ""),
                 url=f"https://www.arbeitsagentur.de/jobsuche/jobdetail/{ref}",
                 quelle="Arbeitsagentur",
                 remote=nur_remote,
@@ -388,17 +422,65 @@ def fetch_himalayas(was: str, land: str | None = "Germany",
 
 
 # ============================================================
-# 3e. BA-DETAILS – Beschreibung für Top-Treffer nachladen
+# 3e. FETCHER – LinkedIn (manuell, via linkedin_bridge.py)
+# ============================================================
+
+LINKEDIN_TREFFER_PFAD = "linkedin_treffer.json"
+
+
+def lade_linkedin_datei(pfad: str = LINKEDIN_TREFFER_PFAD) -> list[Job]:
+    """Liest LinkedIn-Treffer ein, die Claude zuvor manuell über den
+    LinkedIn-MCP geholt und via linkedin_bridge.py in eine JSON-Datei
+    geschrieben hat (siehe linkedin_bridge.py für den Ablauf).
+
+    job_scout.py ruft den MCP nie selbst auf -- das kann nur eine laufende
+    Claude-Session. Die Datei wird nach dem Einlesen gelöscht, damit ein
+    späterer, rein automatischer Lauf (z.B. der launchd-Zeitplan) keine
+    veralteten LinkedIn-Daten nochmal verwendet.
+    """
+    p = Path(pfad)
+    if not p.exists():
+        return []
+
+    try:
+        eintraege = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"  [WARN] LinkedIn-Datei '{pfad}' konnte nicht gelesen "
+              f"werden: {e}", file=sys.stderr)
+        return []
+
+    jobs = [
+        Job(
+            titel=a.get("titel", ""),
+            firma=a.get("firma", "unbekannt"),
+            ort=a.get("ort", ""),
+            veroeffentlicht=a.get("veroeffentlicht", ""),
+            url=a.get("url", ""),
+            quelle="LinkedIn",
+            remote=bool(a.get("remote")),
+            beschreibung=a.get("beschreibung", ""),
+        )
+        for a in eintraege
+    ]
+
+    p.unlink()
+    return jobs
+
+
+# ============================================================
+# 3f. BA-DETAILS – Beschreibung für Top-Treffer nachladen
 # ============================================================
 
 BA_DETAIL_URL = ("https://rest.arbeitsagentur.de/jobboerse/"
-                 "jobsuche-service/pc/v2/jobdetails/{ref}")
+                 "jobsuche-service/pc/v4/jobdetails/{ref}")
 
 
 def lade_ba_beschreibung(job: Job) -> bool:
     """Lädt die Stellenbeschreibung einer BA-Anzeige nach.
 
     Die Detail-API erwartet die Referenznummer base64-kodiert.
+    Setzt nebenbei job.remote, falls die BA explizit "homeofficemoeglich"
+    meldet (verlässlicher als das Text-Keyword-Raten im Scoring).
     Gibt True zurück, wenn eine Beschreibung gefunden wurde.
     """
     refnr = job.url.rstrip("/").rsplit("/", 1)[-1]
@@ -409,7 +491,10 @@ def lade_ba_beschreibung(job: Job) -> bool:
         r = requests.get(BA_DETAIL_URL.format(ref=ref_b64),
                          headers=BA_HEADERS, timeout=15)
         r.raise_for_status()
-        text = r.json().get("stellenbeschreibung", "")
+        daten = r.json()
+        text = daten.get("stellenangebotsBeschreibung", "")
+        if daten.get("homeofficemoeglich"):
+            job.remote = True
         if text:
             job.beschreibung = re.sub(r"<[^>]+>", " ", text)[:3000]
             return True
@@ -500,6 +585,28 @@ def enthaelt_wort(kw: str, text: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(kw)}(?!\w)", text) is not None
 
 
+VERNEINUNGEN = ("kein", "keine", "keinen", "keiner", "keinem", "nicht",
+                "ohne", "no ", "not ", "without", "zero ")
+
+
+def ist_verneint(kw: str, text: str) -> bool | None:
+    """Prüft, ob Vorkommen von kw verneint sind ("keine Kaltakquise",
+    "no cold calling") -- so ein Satz ist für uns ein Plus, kein Minus.
+
+    Gibt True zurück, wenn ALLE Vorkommen von kw verneint sind (Malus soll
+    umgedreht werden), False wenn mindestens ein unverneintes Vorkommen
+    existiert (normaler Malus bleibt), None wenn kw gar nicht vorkommt.
+    """
+    treffer = list(re.finditer(rf"(?<!\w){re.escape(kw)}(?!\w)", text))
+    if not treffer:
+        return None
+    for m in treffer:
+        vorlauf = text[max(0, m.start() - 25):m.start()]
+        if not any(neg in vorlauf for neg in VERNEINUNGEN):
+            return False
+    return True
+
+
 def score_job(job: Job) -> Job:
     """Bewertet einen Job nach den SCORE_REGELN (0–100, gekappt)."""
     titel_text = f"{job.titel} {job.firma}".lower()
@@ -530,9 +637,16 @@ def score_job(job: Job) -> Job:
             punkte += p
             gruende.append(f"Keyword '{kw}' (+{p})")
 
-    # Malus-Keywords (Abwertung, kein Ausschluss)
+    # Malus-Keywords (Abwertung, kein Ausschluss) -- verneinte Vorkommen wie
+    # "keine Kaltakquise" oder "no cold calling" werden zum Bonus gedreht,
+    # statt Stellen zu bestrafen, die explizit das Gegenteil versprechen.
     for kw, p in SCORE_REGELN["malus_keywords"].items():
-        if enthaelt_wort(kw, voll_text):
+        verneint = ist_verneint(kw, voll_text)
+        if verneint is True:
+            bonus = -p
+            punkte += bonus
+            gruende.append(f"Verneint '{kw}' -> Bonus (+{bonus})")
+        elif verneint is False:
             punkte += p
             gruende.append(f"Malus '{kw}' ({p})")
 
@@ -548,10 +662,14 @@ def score_job(job: Job) -> Job:
         punkte += SCORE_REGELN["remote_bonus"]
         gruende.append(f"Remote (+{SCORE_REGELN['remote_bonus']})")
 
-    # Standort
-    if PROFIL["ort"].lower() in (job.ort or "").lower():
-        punkte += SCORE_REGELN["leipzig_bonus"]
-        gruende.append(f"Standort {PROFIL['ort']} (+{SCORE_REGELN['leipzig_bonus']})")
+    # Standort (Leipzig, Leipziger Land, Halle, Schkeuditz & Umgebung -
+    # zählt genauso viel wie Remote)
+    ort_text = (job.ort or "").lower()
+    lokal_treffer = next(
+        (o for o in SCORE_REGELN["lokale_orte"] if o in ort_text), None)
+    if lokal_treffer:
+        punkte += SCORE_REGELN["lokal_bonus"]
+        gruende.append(f"Lokal: {lokal_treffer.title()} (+{SCORE_REGELN['lokal_bonus']})")
 
     # Frische
     try:
@@ -676,6 +794,15 @@ def main():
     if q.get("arbeitnow"):
         print("[Arbeitnow] Lade aktuelle Stellen (Filter über Scoring)...")
         for job in fetch_arbeitnow():
+            alle.setdefault(job.key, job)
+
+    # LinkedIn läuft nie automatisch mit -- nur wenn Claude vorher manuell
+    # linkedin_bridge.py benutzt und linkedin_treffer.json geschrieben hat.
+    linkedin_jobs = lade_linkedin_datei()
+    if linkedin_jobs:
+        print(f"[LinkedIn] {len(linkedin_jobs)} manuell geholte Treffer "
+              f"eingelesen...")
+        for job in linkedin_jobs:
             alle.setdefault(job.key, job)
 
     print(f"\n{len(alle)} eindeutige Stellen gefunden. Bewerte...")

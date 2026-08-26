@@ -1,0 +1,16 @@
+Ich habe eine Einladung zum Vorstellungsgespräch: __FIRMA__, Position __POSITION__, Gespräch am __DATUM__, Gesprächspartner: __NAME__. Arbeite im Ordner /Users/marcpoenisch/Documents/Projekte/JobScout.
+
+1. Recherchiere die Firma: Produkte/Dienstleistungen, Zielkunden, Geschäftsmodell, Größe, Standorte, aktuelle News der letzten 6 Monate, Wettbewerber. Nutze die Firmenwebsite und aktuelle Quellen; kennzeichne Unsicheres als Annahme.
+
+2. Falls Gesprächspartner bekannt: Recherchiere deren Rolle und beruflichen Hintergrund (nur öffentlich zugängliche Quellen, z. B. LinkedIn, Firmenwebsite). Keine Spekulationen über die Person.
+
+3. Lies das ursprüngliche Anschreiben und den Lebenslauf zu dieser Bewerbung aus dem Ordner "bewerbungen" (Dateien mit __FIRMA__ im Namen) sowie Lebenslauf_Master.docx.
+
+4. Erstelle ein Briefing-Dokument Interview_Briefing___FIRMA__.docx mit:
+   a) Firmenprofil auf einer Seite (Fakten, Quellen genannt)
+   b) 10 wahrscheinliche Interviewfragen für diese Position, davon mindestens: die Quereinsteiger-Frage ("Warum der Wechsel aus der Logistik?"), eine Frage zu Kaltakquise/Umgang mit Ablehnung, eine Rollenspielfrage ("Verkaufen Sie mir...") und eine zur Motivation für genau diese Firma
+   c) zu jeder Frage ein Antwortgerüst in Stichpunkten – ausschließlich aus Fakten meines Lebenslaufs und meiner Weiterbildung, nach dem STAR-Prinzip wo passend. Nichts erfinden.
+   d) 5 gute Rückfragen von mir an die Firma (zeigen Vorbereitung und Sales-Denke)
+   e) organisatorische Checkliste (Unterlagen, Technik bei Remote-Gespräch, Kleidung, Anreise/Puffer)
+
+5. Aktualisiere im bewerbungen_tracker.csv den Status dieser Firma auf "interview" und notiere das Gesprächsdatum in den Notizen.
