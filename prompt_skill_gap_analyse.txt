@@ -1,4 +1,4 @@
-Führe im Ordner /Users/marcpoenisch/Documents/Projekte/JobScout folgende Schritte aus:
+Führe im Ordner /Users/marcpoenisch/Projekte/JobScout folgende Schritte aus:
 
 1. Starte "python3 skill_radar.py" und warte auf das Ergebnis.
 

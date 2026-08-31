@@ -1,4 +1,4 @@
-Ich habe eine Einladung zum Vorstellungsgespräch: __FIRMA__, Position __POSITION__, Gespräch am __DATUM__, Gesprächspartner: __NAME__. Arbeite im Ordner /Users/marcpoenisch/Documents/Projekte/JobScout.
+Ich habe eine Einladung zum Vorstellungsgespräch: __FIRMA__, Position __POSITION__, Gespräch am __DATUM__, Gesprächspartner: __NAME__. Arbeite im Ordner /Users/marcpoenisch/Projekte/JobScout.
 
 1. Recherchiere die Firma: Produkte/Dienstleistungen, Zielkunden, Geschäftsmodell, Größe, Standorte, aktuelle News der letzten 6 Monate, Wettbewerber. Nutze die Firmenwebsite und aktuelle Quellen; kennzeichne Unsicheres als Annahme.
 

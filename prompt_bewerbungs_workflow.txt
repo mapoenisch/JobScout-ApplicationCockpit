@@ -1,4 +1,4 @@
-Führe im Ordner /Users/marcpoenisch/Documents/Projekte/JobScout folgende Schritte aus:
+Führe im Ordner /Users/marcpoenisch/Projekte/JobScout folgende Schritte aus:
 
 * Öffne bewerbungen_tracker.csv.
 

@@ -28,7 +28,7 @@ bist zeitnah am Rechner.
 
 Manuell jederzeit auch so startbar:
 ```
-bash /Users/marcpoenisch/Documents/Projekte/JobScout/run_bewerbungs_workflow.sh
+bash /Users/marcpoenisch/Projekte/JobScout/run_bewerbungs_workflow.sh
 ```
 
 ## 2. Skill-Gap-Analyse + Kurssuche
@@ -44,7 +44,7 @@ Rückfragen durch, öffnet sich aber ebenfalls in einem Terminal-Fenster
 
 Manuell:
 ```
-bash /Users/marcpoenisch/Documents/Projekte/JobScout/run_skill_gap_analyse.sh
+bash /Users/marcpoenisch/Projekte/JobScout/run_skill_gap_analyse.sh
 ```
 
 ## 3. Interview-Prep (bewusst ohne Zeitplan)

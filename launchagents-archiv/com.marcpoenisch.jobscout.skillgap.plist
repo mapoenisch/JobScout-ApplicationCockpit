@@ -9,7 +9,7 @@
         <string>/usr/bin/open</string>
         <string>-a</string>
         <string>Terminal</string>
-        <string>/Users/marcpoenisch/Documents/Projekte/JobScout/run_skill_gap_analyse.sh</string>
+        <string>/Users/marcpoenisch/Projekte/JobScout/run_skill_gap_analyse.sh</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
