@@ -22,16 +22,16 @@ sie warten auf den nächsten Termin.
 Für Läufe auf Zuruf braucht es launchd nicht. Die Agents rufen ohnehin nur
 `open -a Terminal <skript>` auf. Direkt starten:
 
-    ~/Documents/Projekte/JobScout/run_job_scout.sh
-    ~/Documents/Projekte/JobScout/run_bewerbungs_workflow.sh
-    ~/Documents/Projekte/JobScout/run_skill_gap_analyse.sh
-    ~/Documents/Projekte/JobScout/run_interview_prep.command
+    ~/Projekte/JobScout/run_job_scout.sh
+    ~/Projekte/JobScout/run_bewerbungs_workflow.sh
+    ~/Projekte/JobScout/run_skill_gap_analyse.sh
+    ~/Projekte/JobScout/run_interview_prep.command
 
 Oder im Finder doppelklicken.
 
 ## Alle drei zurückholen
 
-    cp ~/Documents/Projekte/JobScout/launchagents-archiv/com.marcpoenisch.jobscout*.plist ~/Library/LaunchAgents/
+    cp ~/Projekte/JobScout/launchagents-archiv/com.marcpoenisch.jobscout*.plist ~/Library/LaunchAgents/
     for f in ~/Library/LaunchAgents/com.marcpoenisch.jobscout*.plist; do launchctl bootstrap gui/501 "$f"; done
 
 Der zweite Schritt ist optional – beim nächsten Anmelden lädt launchd sie von
@@ -39,7 +39,7 @@ selbst. `bootstrap` macht es sofort wirksam.
 
 ## Einzelnen zurückholen
 
-    cp ~/Documents/Projekte/JobScout/launchagents-archiv/com.marcpoenisch.jobscout.plist ~/Library/LaunchAgents/
+    cp ~/Projekte/JobScout/launchagents-archiv/com.marcpoenisch.jobscout.plist ~/Library/LaunchAgents/
     launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.marcpoenisch.jobscout.plist
 
 ## Prüfen, was geladen ist
@@ -51,6 +51,6 @@ Keine Ausgabe = kein Zeitplan aktiv.
 ## Wieder stilllegen
 
     launchctl bootout gui/501/com.marcpoenisch.jobscout
-    mv ~/Library/LaunchAgents/com.marcpoenisch.jobscout.plist ~/Documents/Projekte/JobScout/launchagents-archiv/
+    mv ~/Library/LaunchAgents/com.marcpoenisch.jobscout.plist ~/Projekte/JobScout/launchagents-archiv/
 
 `501` ist Marcs UID (`id -u`).

@@ -1,5 +1,5 @@
 #!/bin/bash
-cd "/Users/marcpoenisch/Documents/Projekte/JobScout" || exit 1
+cd "/Users/marcpoenisch/Projekte/JobScout" || exit 1
 
 echo "Interview-Prep – Angaben zur Einladung:"
 read -p "Firma: " FIRMA
