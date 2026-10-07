@@ -28,7 +28,9 @@ import re
 import subprocess
 import sys
 import threading
+import sqlite3
 import time
+import types
 import webbrowser
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -53,7 +55,7 @@ TRACKER_FELDER = ["Firma", "Position", "Link", "Status", "Erstellt am",
                   "Beworben am", "Follow-up am", "Ergebnis", "Notizen"]
 STATUSWERTE = ["vorbereitet", "beworben", "follow-up", "interview",
                "absage", "angebot"]
-FOLLOWUP_TAGE = 12
+FOLLOWUP_TAGE = 12          # Standard, im Cockpit unter Einstellungen änderbar
 
 # Python mit installiertem "requests" (wie in run_job_scout.sh)
 PYTHON_SCOUT = ("/Library/Developer/CommandLineTools/Library/Frameworks/"
@@ -112,7 +114,7 @@ def followup_faellig(r: dict, heute: date | None = None) -> bool:
         beworben = date.fromisoformat(r["Beworben am"][:10])
     except ValueError:
         return False
-    return (heute - beworben).days > FOLLOWUP_TAGE
+    return (heute - beworben).days > followup_tage()
 
 
 def dokumente_fuer(firma: str) -> list[dict]:
@@ -152,7 +154,7 @@ def tracker_api() -> dict:
         r["faellig"] = followup_faellig(r)
         r["dokumente"] = dokumente_fuer(r["Firma"])
     return {"eintraege": rows, "statuswerte": STATUSWERTE,
-            "followup_tage": FOLLOWUP_TAGE}
+            "followup_tage": followup_tage()}
 
 
 def lade_jobs() -> list[dict]:
@@ -313,7 +315,7 @@ def prompt_bewerbung(stellen: list[dict]) -> str:
         "Stellen die übrigen Schritte des folgenden Workflows aus "
         "(Ausschreibung lesen, Homepage-Recherche, Lebenslauf + "
         "Anschreiben, Tracker-Eintrag):\n\n"
-        "----- WORKFLOW -----\n" + basis)
+        "----- WORKFLOW -----\n" + basis + bewerbungs_zusatz())
 
 
 def prompt_interview(firma: str, position: str, datum: str, name: str) -> str:
@@ -328,7 +330,8 @@ def prompt_interview(firma: str, position: str, datum: str, name: str) -> str:
 WORKFLOWS = {
     "bewerbung_komplett": ("Bewerbungs-Workflow (mit Auswahl im Terminal)",
                            lambda d: (BASIS / "prompt_bewerbungs_workflow.txt")
-                           .read_text(encoding="utf-8")),
+                           .read_text(encoding="utf-8")
+                           + bewerbungs_zusatz(mit_auswahl=True)),
     "skill_gap": ("Skill-Gap-Analyse + Kurssuche",
                   lambda d: (BASIS / "prompt_skill_gap_analyse.txt")
                   .read_text(encoding="utf-8")),
@@ -369,7 +372,7 @@ def tracker_aktion(daten: dict) -> dict:
             r["Status"] = "beworben"
             r["Beworben am"] = heute
             r["Follow-up am"] = (date.today()
-                                 + timedelta(days=FOLLOWUP_TAGE)).isoformat()
+                                 + timedelta(days=followup_tage())).isoformat()
         elif aktion == "update":
             for feld in TRACKER_FELDER:
                 if feld in daten:
@@ -379,7 +382,7 @@ def tracker_aktion(daten: dict) -> dict:
             if r["Status"] == "beworben" and not r["Beworben am"]:
                 r["Beworben am"] = heute
                 r["Follow-up am"] = (date.today()
-                                     + timedelta(days=FOLLOWUP_TAGE)).isoformat()
+                                     + timedelta(days=followup_tage())).isoformat()
         elif aktion == "loeschen":
             rows.pop(idx)
         else:
@@ -422,13 +425,292 @@ def dokumente_api() -> dict:
 
 
 # ============================================================
-# 6. HTTP-SERVER
+# 6. EINSTELLUNGEN (Suchprofil, Scoring, Skills, Bewerbung)
+# ============================================================
+
+EINSTELLUNGEN_PFAD = BASIS / "einstellungen.json"
+BEWERBUNG_STANDARD = {
+    "followup_tage": FOLLOWUP_TAGE,
+    "min_score": 50,          # Kurzliste im kompletten Workflow
+    "max_stellen": 15,
+    "tonfall": "anzeige",     # anzeige | foermlich | locker
+    "sprache": "deutsch",     # deutsch | anzeige
+    "zusatz": "",             # eigene Anweisungen für Lebenslauf/Anschreiben
+}
+# Keyword -> Punkte; Schlüssel frei wählbar
+FREIE_DICTS = {"titel_keywords", "text_keywords", "malus_keywords",
+               "titel_malus_keywords"}
+# Werden gegen kleingeschriebenen Text gematcht
+KLEIN_LISTEN = {"blacklist", "lokale_orte", "firmen_blacklist"}
+_score_lock = threading.Lock()
+
+
+def _job_scout():
+    """Importiert job_scout für Standardwerte und Scoring. requests wird
+    dabei nur beim Abrufen der APIs gebraucht, nicht für die Bewertung."""
+    try:
+        import requests  # noqa: F401
+    except ImportError:
+        sys.modules.setdefault("requests", types.ModuleType("requests"))
+    if str(BASIS) not in sys.path:
+        sys.path.insert(0, str(BASIS))
+    import job_scout
+    return job_scout
+
+
+def _skill_radar():
+    _job_scout()
+    import skill_radar
+    return skill_radar
+
+
+def _kopie(x):
+    return json.loads(json.dumps(x))
+
+
+def _gespeichert() -> dict:
+    if not EINSTELLUNGEN_PFAD.exists():
+        return {}
+    try:
+        return json.loads(EINSTELLUNGEN_PFAD.read_text(encoding="utf-8"))
+    except ValueError:
+        return {}
+
+
+def _mische(standard: dict, ueber: dict | None) -> dict:
+    out = _kopie(standard)
+    for k, v in (ueber or {}).items():
+        if k in out:
+            out[k] = v
+    return out
+
+
+def followup_tage() -> int:
+    wert = (_gespeichert().get("bewerbung") or {}).get("followup_tage")
+    return wert if isinstance(wert, int) and wert > 0 else FOLLOWUP_TAGE
+
+
+def bewerbungs_zusatz(mit_auswahl: bool = False) -> str:
+    """Hängt abweichende Bewerbungs-Einstellungen an die Claude-Prompts."""
+    b = _mische(BEWERBUNG_STANDARD, _gespeichert().get("bewerbung"))
+    zeilen = []
+    if mit_auswahl and (b["min_score"], b["max_stellen"]) != (50, 15):
+        zeilen.append(f"Zeige in der Kurzliste neue Stellen ab Score "
+                      f"{b['min_score']}, maximal die besten {b['max_stellen']}.")
+    if b["tonfall"] == "foermlich":
+        zeilen.append("Schreibe das Anschreiben unabhängig vom Ton der Anzeige "
+                      "klassisch-förmlich und sachlich.")
+    elif b["tonfall"] == "locker":
+        zeilen.append("Schreibe das Anschreiben unabhängig vom Ton der Anzeige "
+                      "eher direkt, persönlich und locker (weiterhin Sie-Form, "
+                      "außer die Anzeige duzt).")
+    if b["sprache"] == "anzeige":
+        zeilen.append("Verfasse Lebenslauf und Anschreiben in der Sprache der "
+                      "Stellenanzeige (z. B. Englisch bei englischer Anzeige).")
+    if b["zusatz"].strip():
+        zeilen.append("Zusätzliche Vorgaben von mir: " + b["zusatz"].strip())
+    if not zeilen:
+        return ""
+    return ("\n\n----- MEINE EINSTELLUNGEN (gehen dem Workflow vor) -----\n"
+            + "\n".join(f"* {z}" for z in zeilen))
+
+
+def _validiere(neu, standard, name: str = ""):
+    """Prüft einen Wert gegen den Typ des Standardwerts."""
+    if isinstance(standard, bool):
+        if not isinstance(neu, bool):
+            raise ValueError(f"{name}: ja/nein erwartet")
+        return neu
+    if isinstance(standard, int):
+        if isinstance(neu, bool) or not isinstance(neu, (int, float)):
+            raise ValueError(f"{name}: Zahl erwartet")
+        return int(neu)
+    if isinstance(standard, str):
+        if not isinstance(neu, str):
+            raise ValueError(f"{name}: Text erwartet")
+        return neu.strip()[:2000]
+    if isinstance(standard, list):
+        if not isinstance(neu, list):
+            raise ValueError(f"{name}: Liste erwartet")
+        out = []
+        for x in neu:
+            t = str(x).strip()
+            if name in KLEIN_LISTEN:
+                t = t.lower()
+            if t and t not in out:
+                out.append(t)
+        return out
+    if isinstance(standard, dict):
+        if not isinstance(neu, dict):
+            raise ValueError(f"{name}: Objekt erwartet")
+        if name in FREIE_DICTS:
+            out = {}
+            for k, v in neu.items():
+                kw = str(k).strip().lower()
+                if kw:
+                    out[kw] = max(-100, min(100, _validiere(v, 0, f"{name}.{kw}")))
+            return out
+        return {k: _validiere(neu.get(k, standard[k]), standard[k], k)
+                for k in standard}
+    raise ValueError(f"{name}: unbekannter Typ")
+
+
+def einstellungen_api() -> dict:
+    js, sr = _job_scout(), _skill_radar()
+    g = _gespeichert()
+    return {
+        "profil": _mische(js.STANDARD_PROFIL, g.get("profil")),
+        "score_regeln": _mische(js.STANDARD_SCORE_REGELN, g.get("score_regeln")),
+        "skill_status": _mische(sr.STANDARD_STATUS, g.get("skill_status")),
+        "bewerbung": _mische(BEWERBUNG_STANDARD, g.get("bewerbung")),
+        "standard": {
+            "profil": js.STANDARD_PROFIL,
+            "score_regeln": js.STANDARD_SCORE_REGELN,
+            "skill_status": sr.STANDARD_STATUS,
+            "bewerbung": BEWERBUNG_STANDARD,
+        },
+        "skill_katalog": {k: list(v) for k, v in sr.SKILL_KATALOG.items()},
+        "angepasst": bool(g),
+    }
+
+
+def _pruefe_einstellungen(daten: dict) -> dict:
+    js, sr = _job_scout(), _skill_radar()
+    alle_skills = {s for v in sr.SKILL_KATALOG.values() for s in v}
+    out = {
+        "profil": _validiere(daten.get("profil", {}), js.STANDARD_PROFIL),
+        "score_regeln": _validiere(daten.get("score_regeln", {}),
+                                   js.STANDARD_SCORE_REGELN),
+        "skill_status": _validiere(daten.get("skill_status", {}),
+                                   sr.STANDARD_STATUS),
+        "bewerbung": _validiere(daten.get("bewerbung", {}), BEWERBUNG_STANDARD),
+    }
+    for k in ("vorhanden", "weiterbildung"):
+        out["skill_status"][k] = [s for s in out["skill_status"][k]
+                                  if s in alle_skills]
+    if not out["profil"]["suchbegriffe"]:
+        raise ValueError("Mindestens ein Suchbegriff wird gebraucht")
+    if not out["score_regeln"]["titel_keywords"]:
+        raise ValueError("Mindestens ein Rollen-Keyword wird gebraucht")
+    if out["score_regeln"]["frische_tage"] < 1:
+        raise ValueError("Frische-Zeitraum muss mindestens 1 Tag sein")
+    b = out["bewerbung"]
+    if b["tonfall"] not in ("anzeige", "foermlich", "locker"):
+        raise ValueError("Ungültiger Tonfall")
+    if b["sprache"] not in ("deutsch", "anzeige"):
+        raise ValueError("Ungültige Sprache")
+    b["followup_tage"] = max(1, min(90, b["followup_tage"]))
+    b["max_stellen"] = max(1, min(50, b["max_stellen"]))
+    return out
+
+
+def speichere_einstellungen(daten: dict) -> dict:
+    sauber = _pruefe_einstellungen(daten)
+    tmp = EINSTELLUNGEN_PFAD.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(sauber, ensure_ascii=False, indent=2) + "\n",
+                   encoding="utf-8")
+    os.replace(tmp, EINSTELLUNGEN_PFAD)
+    return {"ok": True}
+
+
+def setze_einstellungen_zurueck() -> dict:
+    if EINSTELLUNGEN_PFAD.exists():
+        os.replace(EINSTELLUNGEN_PFAD, EINSTELLUNGEN_PFAD.with_suffix(".json.bak"))
+    return {"ok": True}
+
+
+def _bewertbare_jobs(js) -> list:
+    """Stellen aus jobs_ranked.csv + Beschreibung aus jobs_gesehen.db."""
+    beschreibungen = {}
+    db = BASIS / "jobs_gesehen.db"
+    if db.exists():
+        con = sqlite3.connect(str(db))
+        try:
+            beschreibungen = dict(con.execute(
+                "SELECT key, COALESCE(beschreibung, '') FROM gesehen"))
+        finally:
+            con.close()
+    jobs = []
+    for d in lade_jobs():
+        j = js.Job(titel=d["titel"], firma=d["firma"], ort=d["ort"],
+                   veroeffentlicht=d["datum"], url=d["link"], quelle=d["quelle"],
+                   remote=d["remote"])
+        j.beschreibung = beschreibungen.get(j.key, "")
+        j.neu = d["neu"]
+        jobs.append((j, d))
+    return jobs
+
+
+def _bewerte(regeln: dict) -> list:
+    js = _job_scout()
+    paare = _bewertbare_jobs(js)
+    with _score_lock:
+        alt = js.SCORE_REGELN
+        js.SCORE_REGELN = regeln
+        try:
+            for j, _ in paare:
+                js.score_job(j)
+        finally:
+            js.SCORE_REGELN = alt
+    return paare
+
+
+def vorschau(daten: dict) -> dict:
+    js = _job_scout()
+    regeln = _validiere(daten.get("score_regeln", {}), js.STANDARD_SCORE_REGELN)
+    # Vergleichsbasis: gespeicherte Regeln, ebenfalls heute bewertet. So
+    # zeigt die Vorschau nur den Effekt der Änderung (nicht z. B. den
+    # inzwischen weggefallenen Frische-Bonus).
+    basis = _bewerte(_mische(js.STANDARD_SCORE_REGELN,
+                             _gespeichert().get("score_regeln")))
+    paare = [(j, {"score": b.score}) for (j, _), (b, _) in
+             zip(_bewerte(regeln), basis)]
+    def info(j, d):
+        return {"titel": j.titel, "firma": j.firma, "ort": j.ort,
+                "score": j.score, "alt": d["score"], "neu": j.neu,
+                "gruende": j.score_gruende}
+    gueltig = [(j, d) for j, d in paare if j.score >= 0]
+    top = sorted(gueltig, key=lambda p: p[0].score, reverse=True)[:8]
+    bewegt = sorted(gueltig, key=lambda p: p[0].score - p[1]["score"])
+    return {
+        "gesamt": len(paare),
+        "top_vorher": sum(d["score"] >= 50 for _, d in paare),
+        "ausgeschlossen_vorher": sum(d["score"] < 0 for _, d in paare),
+        "top_nachher": sum(j.score >= 50 for j, _ in gueltig),
+        "ausgeschlossen": sum(j.score < 0 for j, _ in paare),
+        "top": [info(*p) for p in top],
+        "aufsteiger": [info(*p) for p in reversed(bewegt[-5:])
+                       if p[0].score > p[1]["score"]],
+        "absteiger": [info(*p) for p in bewegt[:5]
+                      if p[0].score < p[1]["score"]],
+    }
+
+
+def neu_bewerten() -> dict:
+    """Bewertet die vorhandenen Stellen mit den gespeicherten Regeln neu
+    und schreibt jobs_ranked.csv + jobs_report.html (ohne neue Suche)."""
+    js = _job_scout()
+    regeln = _mische(js.STANDARD_SCORE_REGELN, _gespeichert().get("score_regeln"))
+    paare = _bewerte(regeln)
+    relevant = sorted((j for j, _ in paare if j.score >= 0),
+                      key=lambda j: j.score, reverse=True)
+    with _tracker_lock:
+        js.schreibe_csv(relevant, str(JOBS_PFAD))
+        js.schreibe_html(relevant, str(BASIS / "jobs_report.html"))
+    return {"ok": True, "bewertet": len(relevant),
+            "ausgeschlossen": len(paare) - len(relevant)}
+
+
+# ============================================================
+# 7. HTTP-SERVER
 # ============================================================
 
 STATISCH = {
     "/": (APP_DIR / "index.html", "text/html; charset=utf-8"),
     "/app.css": (APP_DIR / "app.css", "text/css; charset=utf-8"),
     "/app.js": (APP_DIR / "app.js", "application/javascript; charset=utf-8"),
+    "/einstellungen.js": (APP_DIR / "einstellungen.js",
+                          "application/javascript; charset=utf-8"),
     "/report/jobs": (BASIS / "jobs_report.html", "text/html; charset=utf-8"),
     "/report/skills": (BASIS / "skill_report.html", "text/html; charset=utf-8"),
 }
@@ -485,6 +767,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(tracker_api())
             if url.path == "/api/dokumente":
                 return self._json(dokumente_api())
+            if url.path == "/api/einstellungen":
+                return self._json(einstellungen_api())
             if url.path == "/api/task":
                 name = parse_qs(url.query).get("name", [""])[0]
                 return self._json(_task_info(name) if name in TASKS
@@ -508,6 +792,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(tracker_aktion(daten))
             if pfad == "/api/task":
                 return self._json(starte_task(daten.get("name", "")))
+            if pfad == "/api/einstellungen":
+                return self._json(speichere_einstellungen(daten))
+            if pfad == "/api/einstellungen/vorschau":
+                return self._json(vorschau(daten))
+            if pfad == "/api/einstellungen/neu_bewerten":
+                return self._json(neu_bewerten())
+            if pfad == "/api/einstellungen/zuruecksetzen":
+                return self._json(setze_einstellungen_zurueck())
             if pfad == "/api/oeffnen":
                 return self._json(oeffne_datei(daten.get("pfad", ""),
                                                bool(daten.get("finder"))))

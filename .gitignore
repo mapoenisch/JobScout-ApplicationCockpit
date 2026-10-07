@@ -20,3 +20,4 @@ __pycache__/
 *.csv.tmp
 .playwright-mcp/
 skill_report.html
+einstellungen.json.tmp
