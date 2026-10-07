@@ -43,7 +43,7 @@ python3 jobscout_app.py      # oder Doppelklick auf run_cockpit.command
 
 Öffnet `http://127.0.0.1:8765` mit Dashboard, Stellenliste (Filter, Auswahl,
 Scoring-Gründe), Kanban-Pipeline für `bewerbungen_tracker.csv`, Unterlagen,
-Interview-Prep-Formular, Skill-Radar und Automatisierungen. Ausgewählte
+Interview-Prep-Formular, Skill-Radar, Einstellungen und Automatisierungen. Ausgewählte
 Stellen werden per Klick an den Bewerbungs-Workflow (Claude Code im
 Terminal) übergeben. Nur Standardbibliothek, lauscht nur auf localhost.
 
@@ -59,9 +59,17 @@ Ohne Adzuna-Keys läuft das Tool trotzdem – die Quelle wird dann übersprungen
 
 ## Konfiguration
 
-Suchbegriffe, Standort, Keyword-Gewichte, Malus- und Blacklist-Regeln liegen
-als einfache Dictionaries am Anfang von `job_scout.py` (Blöcke `PROFIL` und
-`SCORE_REGELN`) und lassen sich ohne Programmierkenntnisse anpassen.
+Am einfachsten über das Cockpit unter **Einstellungen** (Tabs Suchprofil,
+Scoring-Engine, Ausschlüsse, Skill-Profil, Bewerbung). Dort gibt es eine
+Live-Vorschau der neuen Top-Treffer und „Speichern & neu bewerten“, das die
+vorhandenen Stellen ohne neuen Suchlauf neu bewertet.
+
+Die Änderungen landen in `einstellungen.json`. `job_scout.py` und
+`skill_radar.py` übernehmen sie bei jedem Start, auch ohne Cockpit. Die
+Standardwerte bleiben als Dictionaries am Anfang von `job_scout.py`
+(`PROFIL`, `SCORE_REGELN`) und `skill_radar.py` (`MEIN_STATUS`); „Standard
+wiederherstellen“ im Cockpit kehrt zu ihnen zurück. Neue Skills samt
+Synonymen werden weiterhin in `SKILL_KATALOG` in `skill_radar.py` gepflegt.
 
 ## Täglicher automatischer Lauf (macOS/Linux)
 
