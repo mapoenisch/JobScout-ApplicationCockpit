@@ -14,3 +14,9 @@ __pycache__/
 # macOS / Backups
 .DS_Store
 *.bak
+
+# Cockpit-Laufzeitdaten (Logs, generierte Prompts)
+.cockpit/
+*.csv.tmp
+.playwright-mcp/
+skill_report.html
