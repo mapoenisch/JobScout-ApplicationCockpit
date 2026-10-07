@@ -33,6 +33,20 @@ Stellenanzeigen statt Leads.
   aller Bewerbungen mit Status und Follow-up-Erinnerungen – gepflegt über
   Claude-Cowork-Aufgaben (siehe `cowork_prompts.md`)
 
+## Cockpit (Weboberfläche)
+
+Alle Bausteine des Bewerbungsprozesses in einer lokalen Oberfläche:
+
+```bash
+python3 jobscout_app.py      # oder Doppelklick auf run_cockpit.command
+```
+
+Öffnet `http://127.0.0.1:8765` mit Dashboard, Stellenliste (Filter, Auswahl,
+Scoring-Gründe), Kanban-Pipeline für `bewerbungen_tracker.csv`, Unterlagen,
+Interview-Prep-Formular, Skill-Radar und Automatisierungen. Ausgewählte
+Stellen werden per Klick an den Bewerbungs-Workflow (Claude Code im
+Terminal) übergeben. Nur Standardbibliothek, lauscht nur auf localhost.
+
 ## Setup
 
 ```bash
