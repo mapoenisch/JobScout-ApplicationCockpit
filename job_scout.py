@@ -166,7 +166,40 @@ SCORE_REGELN = {
         "d2d",
         "door to door",
     ],
+    # Firmen, die nie wieder auftauchen sollen (Teilstring im Firmennamen)
+    "firmen_blacklist": [],
 }
+
+# ------------------------------------------------------------
+# Überschreibungen aus einstellungen.json (gepflegt im Cockpit).
+# Die Werte oben bleiben die Standardwerte; die JSON-Datei ersetzt
+# nur die Schlüssel, die sie enthält.
+# ------------------------------------------------------------
+
+EINSTELLUNGEN_PFAD = Path(__file__).resolve().parent / "einstellungen.json"
+STANDARD_PROFIL = json.loads(json.dumps(PROFIL))
+STANDARD_SCORE_REGELN = json.loads(json.dumps(SCORE_REGELN))
+
+
+def lade_einstellungen(pfad: Path = EINSTELLUNGEN_PFAD) -> dict:
+    if not pfad.exists():
+        return {}
+    try:
+        return json.loads(pfad.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"[Einstellungen] {pfad.name} nicht lesbar, nutze Standard: {e}")
+        return {}
+
+
+def wende_einstellungen_an(daten: dict):
+    """Übernimmt bekannte Schlüssel aus der JSON in PROFIL/SCORE_REGELN."""
+    for ziel, schluessel in ((PROFIL, "profil"), (SCORE_REGELN, "score_regeln")):
+        for k, v in (daten.get(schluessel) or {}).items():
+            if k in ziel:
+                ziel[k] = v
+
+
+wende_einstellungen_an(lade_einstellungen())
 
 # ============================================================
 # 2. DATENMODELL
@@ -619,6 +652,12 @@ def score_job(job: Job) -> Job:
         if bad in voll_text:
             job.score = -1
             job.score_gruende = [f"Ausschluss: '{bad}'"]
+            return job
+    firma_text = (job.firma or "").lower()
+    for bad in SCORE_REGELN.get("firmen_blacklist", []):
+        if bad and bad.lower() in firma_text:
+            job.score = -1
+            job.score_gruende = [f"Firma gesperrt: '{bad}'"]
             return job
 
     # Titel-Keywords (nur der beste Treffer zählt, sonst stapeln sich Synonyme)

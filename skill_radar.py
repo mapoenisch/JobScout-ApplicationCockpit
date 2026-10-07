@@ -24,7 +24,7 @@ import sqlite3
 import sys
 from datetime import date, datetime
 
-from job_scout import DB_PFAD, enthaelt_wort
+from job_scout import DB_PFAD, enthaelt_wort, lade_einstellungen
 
 # ============================================================
 # 1. SKILL-KATALOG – was der Markt fordern könnte
@@ -109,6 +109,13 @@ MEIN_STATUS = {
     # als LÜCKE. Erst eintragen, wenn sich das ändert (z. B. nach einem
     # Sprachkurs oder Zertifikat).
 }
+
+# Überschreibung aus einstellungen.json (Tab "Skill-Profil" im Cockpit)
+STANDARD_STATUS = {k: list(v) for k, v in MEIN_STATUS.items()}
+_skill_status = lade_einstellungen().get("skill_status") or {}
+for _k in ("vorhanden", "weiterbildung"):
+    if isinstance(_skill_status.get(_k), list):
+        MEIN_STATUS[_k] = _skill_status[_k]
 
 # Nur Stellen ab diesem Score fließen in die Analyse ein
 # (damit z. B. fachfremde Arbeitnow-Treffer die Statistik nicht verzerren)
