@@ -110,6 +110,22 @@ MEIN_STATUS = {
     # Sprachkurs oder Zertifikat).
 }
 
+# Eigene Skills aus dem Cockpit (Einstellungen > Skill-Profil > Skill-Editor)
+STANDARD_KATALOG = {k: dict(v) for k, v in SKILL_KATALOG.items()}
+
+
+def mische_katalog(eigen: dict | None) -> dict:
+    """Standard-Katalog + eigene Skills {Kategorie: {Skill: [Synonyme]}}."""
+    out = {k: dict(v) for k, v in STANDARD_KATALOG.items()}
+    for kat, skills in (eigen or {}).items():
+        if isinstance(skills, dict):
+            out.setdefault(kat, {}).update(
+                {s: list(syn) for s, syn in skills.items() if syn})
+    return out
+
+
+SKILL_KATALOG = mische_katalog(lade_einstellungen().get("skill_katalog_eigen"))
+
 # Überschreibung aus einstellungen.json (Tab "Skill-Profil" im Cockpit)
 STANDARD_STATUS = {k: list(v) for k, v in MEIN_STATUS.items()}
 _skill_status = lade_einstellungen().get("skill_status") or {}

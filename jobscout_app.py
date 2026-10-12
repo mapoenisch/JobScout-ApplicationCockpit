@@ -37,6 +37,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import cv_editor
+import unterlagen
+
 # ============================================================
 # 1. KONFIGURATION
 # ============================================================
@@ -202,6 +205,7 @@ def status_api() -> dict:
     for r in tracker:
         pipeline[r["Status"] if r["Status"] in pipeline else "vorbereitet"] += 1
     return {
+        "vorname": cv_editor.lade_profil()["persoenlich"]["vorname"],
         "jobs_gesamt": len(jobs),
         "jobs_neu": sum(j["neu"] for j in jobs),
         "jobs_top": sum(j["score"] >= 50 for j in jobs),
@@ -324,7 +328,8 @@ def prompt_interview(firma: str, position: str, datum: str, name: str) -> str:
     return (vorlage.replace("__FIRMA__", firma)
                    .replace("__POSITION__", position)
                    .replace("__DATUM__", datum)
-                   .replace("__NAME__", name or "unbekannt"))
+                   .replace("__NAME__", name or "unbekannt")
+            + cv_editor.workflow_hinweis())
 
 
 WORKFLOWS = {
@@ -395,6 +400,9 @@ def oeffne_datei(rel: str, im_finder: bool = False) -> dict:
     ziel = (BASIS / rel).resolve()
     erlaubt = {p.resolve() for p in _alle_dokumente()}
     erlaubt |= {p.resolve() for p in BASIS.glob("kurs_empfehlungen_*.md")}
+    erlaubt |= {p.resolve() for p in cv_editor.UNTERLAGEN_DIR.rglob("*")
+                if p.is_file()}
+    erlaubt |= {BEWERBUNGEN_DIR.resolve(), cv_editor.UNTERLAGEN_DIR.resolve()}
     erlaubt |= {(BASIS / n).resolve() for n in
                 ("Lebenslauf_Master.docx", "CV_Marc_Pönisch.pdf",
                  "jobs_report.html", "skill_report.html",
@@ -509,10 +517,11 @@ def bewerbungs_zusatz(mit_auswahl: bool = False) -> str:
                       "Stellenanzeige (z. B. Englisch bei englischer Anzeige).")
     if b["zusatz"].strip():
         zeilen.append("Zusätzliche Vorgaben von mir: " + b["zusatz"].strip())
+    stammdaten = cv_editor.workflow_hinweis()
     if not zeilen:
-        return ""
+        return stammdaten
     return ("\n\n----- MEINE EINSTELLUNGEN (gehen dem Workflow vor) -----\n"
-            + "\n".join(f"* {z}" for z in zeilen))
+            + "\n".join(f"* {z}" for z in zeilen) + stammdaten)
 
 
 def _validiere(neu, standard, name: str = ""):
@@ -569,14 +578,19 @@ def einstellungen_api() -> dict:
             "skill_status": sr.STANDARD_STATUS,
             "bewerbung": BEWERBUNG_STANDARD,
         },
-        "skill_katalog": {k: list(v) for k, v in sr.SKILL_KATALOG.items()},
+        "skill_katalog": {k: list(v) for k, v in
+                          sr.mische_katalog(g.get("skill_katalog_eigen")).items()},
+        "skill_katalog_eigen": g.get("skill_katalog_eigen") or {},
+        "skill_katalog_standard": sr.STANDARD_KATALOG,
         "angepasst": bool(g),
     }
 
 
 def _pruefe_einstellungen(daten: dict) -> dict:
     js, sr = _job_scout(), _skill_radar()
-    alle_skills = {s for v in sr.SKILL_KATALOG.values() for s in v}
+    eigen = _pruefe_katalog(daten.get("skill_katalog_eigen") or {},
+                            sr.STANDARD_KATALOG)
+    alle_skills = {s for v in sr.mische_katalog(eigen).values() for s in v}
     out = {
         "profil": _validiere(daten.get("profil", {}), js.STANDARD_PROFIL),
         "score_regeln": _validiere(daten.get("score_regeln", {}),
@@ -601,6 +615,33 @@ def _pruefe_einstellungen(daten: dict) -> dict:
         raise ValueError("Ungültige Sprache")
     b["followup_tage"] = max(1, min(90, b["followup_tage"]))
     b["max_stellen"] = max(1, min(50, b["max_stellen"]))
+    if eigen:
+        out["skill_katalog_eigen"] = eigen
+    return out
+
+
+def _pruefe_katalog(eigen, standard: dict) -> dict:
+    """Eigene Skills: {Kategorie: {Skill: [Synonyme]}}. Synonyme werden
+    kleingeschrieben; ohne Synonym zählt der Skill-Name selbst."""
+    if not isinstance(eigen, dict):
+        raise ValueError("Skill-Katalog: Objekt erwartet")
+    vorhanden = {s.lower() for v in standard.values() for s in v}
+    out: dict = {}
+    for kat, skills in eigen.items():
+        kat = str(kat).strip()[:60]
+        if not kat or not isinstance(skills, dict):
+            continue
+        for name, syn in skills.items():
+            name = str(name).strip()[:60]
+            if not name or name.lower() in vorhanden:
+                continue
+            liste = []
+            for x in (syn if isinstance(syn, list) else []):
+                t = str(x).strip().lower()[:60]
+                if t and t not in liste:
+                    liste.append(t)
+            out.setdefault(kat, {})[name] = liste or [name.lower()]
+            vorhanden.add(name.lower())
     return out
 
 
@@ -711,6 +752,8 @@ STATISCH = {
     "/app.js": (APP_DIR / "app.js", "application/javascript; charset=utf-8"),
     "/einstellungen.js": (APP_DIR / "einstellungen.js",
                           "application/javascript; charset=utf-8"),
+    "/lebenslauf.js": (APP_DIR / "lebenslauf.js",
+                       "application/javascript; charset=utf-8"),
     "/report/jobs": (BASIS / "jobs_report.html", "text/html; charset=utf-8"),
     "/report/skills": (BASIS / "skill_report.html", "text/html; charset=utf-8"),
 }
@@ -769,6 +812,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(dokumente_api())
             if url.path == "/api/einstellungen":
                 return self._json(einstellungen_api())
+            if url.path == "/api/cv":
+                return self._json(cv_editor.cv_api())
+            if url.path == "/api/unterlagen":
+                return self._json(unterlagen.unterlagen_api())
+            if url.path.startswith("/datei/"):
+                from urllib.parse import unquote
+                body, typ = cv_editor.datei_lesen(unquote(url.path[7:]))
+                self.send_response(200)
+                self.send_header("Content-Type", typ)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                return self.wfile.write(body)
             if url.path == "/api/task":
                 name = parse_qs(url.query).get("name", [""])[0]
                 return self._json(_task_info(name) if name in TASKS
@@ -782,6 +837,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok() or self.headers.get("X-JobScout") != "1":
             return self._json({"fehler": "Nicht erlaubt"}, 403)
         laenge = int(self.headers.get("Content-Length") or 0)
+        if laenge > 40 * 1024 * 1024:
+            return self._json({"fehler": "Anfrage zu groß"}, 413)
         try:
             daten = json.loads(self.rfile.read(laenge) or b"{}")
         except json.JSONDecodeError:
@@ -794,6 +851,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(starte_task(daten.get("name", "")))
             if pfad == "/api/einstellungen":
                 return self._json(speichere_einstellungen(daten))
+            if pfad == "/api/profil":
+                return self._json(cv_editor.speichere_profil(daten))
+            if pfad == "/api/cv":
+                return self._json(cv_editor.speichere_lebenslauf(daten))
+            if pfad == "/api/cv/import":
+                return self._json(cv_editor.importiere_pdfs(daten))
+            if pfad == "/api/cv/pdf":
+                return self._json(cv_editor.exportiere_pdf(daten))
+            if pfad == "/api/unterlagen/upload":
+                return self._json(cv_editor.lade_hoch(daten))
+            if pfad == "/api/unterlagen/loeschen":
+                return self._json(cv_editor.loesche_datei(daten))
+            if pfad == "/api/unterlagen/auslesen":
+                return self._json(cv_editor.zertifikat_auslesen(daten))
+            if pfad == "/api/nachweise":
+                return self._json(unterlagen.speichere_nachweise(daten))
+            if pfad == "/api/nachweise/auswerten":
+                return self._json(unterlagen.nachweis_auswerten(daten))
+            if pfad == "/api/mappe":
+                return self._json(unterlagen.baue_mappe(daten))
             if pfad == "/api/einstellungen/vorschau":
                 return self._json(vorschau(daten))
             if pfad == "/api/einstellungen/neu_bewerten":
