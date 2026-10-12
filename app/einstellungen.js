@@ -56,9 +56,9 @@ async function ladeEinstellungen(neu = false) {
   if (EINST.daten && !neu) return true;
   const e = await sicher(() => api("/api/einstellungen"));
   if (!e) return false;
-  EINST.daten = { profil: e.profil, score_regeln: e.score_regeln, skill_status: e.skill_status, bewerbung: e.bewerbung };
+  EINST.daten = { profil: e.profil, score_regeln: e.score_regeln, skill_status: e.skill_status, bewerbung: e.bewerbung, skill_katalog_eigen: e.skill_katalog_eigen || {} };
   EINST.standard = e.standard;
-  EINST.katalog = e.skill_katalog;
+  EINST.katalogStandard = e.skill_katalog_standard;
   EINST.gespeichert = JSON.stringify(EINST.daten);
   return true;
 }
@@ -235,24 +235,83 @@ function tabAusschluesse() {
   </div>`;
 }
 
+/* Standard-Katalog + eigene Skills -> {Kategorie: [Skill, …]} */
+function skillKatalog() {
+  const out = {};
+  for (const [k, v] of Object.entries(EINST.katalogStandard || {})) out[k] = Object.keys(v);
+  for (const [k, v] of Object.entries(EINST.daten.skill_katalog_eigen || {})) out[k] = [...(out[k] || []), ...Object.keys(v)];
+  return out;
+}
+const istEigenerSkill = (kat, s) => !!EINST.daten.skill_katalog_eigen?.[kat]?.[s];
+
+function skillEditor() {
+  const kats = Object.keys(skillKatalog());
+  return abschnitt("Skill-Editor", "Neue Skills landen im Katalog des Skill-Radars. Synonyme sind die Begriffe, nach denen in Stellenanzeigen gesucht wird – kurze Begriffe zählen nur als ganzes Wort.",
+    `<div class="form-grid skill-neu">
+      <label class="feld">Skill<input type="text" id="sk-name" placeholder="z. B. Pipedrive, Verhandlungsführung"></label>
+      <label class="feld">Kategorie<input type="text" id="sk-kat" list="sk-kats" placeholder="Bestehende wählen oder neue eintippen"></label>
+      <datalist id="sk-kats">${kats.map((k) => `<option value="${esc(k)}">`).join("")}</datalist>
+      <label class="feld" style="grid-column:1/-1">Synonyme (Komma-getrennt)<input type="text" id="sk-syn" placeholder="z. B. verhandlung, verhandlungsgeschick, negotiation"></label>
+    </div>
+    <div class="einst-fuss" style="border:0;padding-top:4px">
+      <div class="segment" id="sk-status">
+        <button type="button" data-wert="vorhanden" class="an ok">Vorhanden</button>
+        <button type="button" data-wert="weiterbildung">Weiterbildung</button>
+        <button type="button" data-wert="luecke">Lücke</button>
+      </div>
+      <button type="button" class="btn btn-primary" id="sk-add">${ICON.plus}Skill hinzufügen</button>
+    </div>`, '<span class="effekt info">Speichern nicht vergessen</span>');
+}
+
+function skillHinzufuegen() {
+  const name = $("#sk-name").value.trim();
+  const kat = $("#sk-kat").value.trim() || "Eigene Skills";
+  const syn = $("#sk-syn").value.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (!name) { toast("Bitte einen Skill-Namen eintragen", true); return; }
+  const alle = Object.values(skillKatalog()).flat().map((x) => x.toLowerCase());
+  if (alle.includes(name.toLowerCase())) { toast(`„${name}“ gibt es schon`, true); return; }
+  const eigen = EINST.daten.skill_katalog_eigen;
+  (eigen[kat] ||= {})[name] = syn.length ? syn : [name.toLowerCase()];
+  const status = $("#sk-status .an")?.dataset.wert || "vorhanden";
+  if (status !== "luecke") EINST.daten.skill_status[status].push(name);
+  einstGeaendert("skill_katalog_eigen");
+  toast(`„${name}“ hinzugefügt – jetzt speichern`);
+  zeichneTab();
+}
+
+function skillEntfernen(kat, name) {
+  const eigen = EINST.daten.skill_katalog_eigen;
+  delete eigen[kat]?.[name];
+  if (eigen[kat] && !Object.keys(eigen[kat]).length) delete eigen[kat];
+  const st = EINST.daten.skill_status;
+  st.vorhanden = st.vorhanden.filter((s) => s !== name);
+  st.weiterbildung = st.weiterbildung.filter((s) => s !== name);
+  einstGeaendert("skill_katalog_eigen");
+  zeichneTab();
+}
+
 function tabSkills() {
   const st = EINST.daten.skill_status;
   const status = (s) => st.vorhanden.includes(s) ? "vorhanden" : st.weiterbildung.includes(s) ? "weiterbildung" : "luecke";
-  const anzahl = (k) => Object.values(EINST.katalog).flat().filter((s) => status(s) === k).length;
+  const katalog = skillKatalog();
+  const anzahl = (k) => Object.values(katalog).flat().filter((s) => status(s) === k).length;
   return `<div class="einst-spalte" style="max-width:920px">
     <div class="hinweis info">${ICON.star}<div>Das Skill-Radar vergleicht die Marktnachfrage mit diesem Profil. Alles auf „Lücke“ taucht im Report als Lücke auf.
       Aktuell: <b>${anzahl("vorhanden")}</b> vorhanden · <b>${anzahl("weiterbildung")}</b> in Weiterbildung · <b>${anzahl("luecke")}</b> Lücken.</div></div>
-    ${Object.entries(EINST.katalog).map(([kat, skills]) => abschnitt(esc(kat), "",
+    ${skillEditor()}
+    ${Object.entries(katalog).map(([kat, skills]) => abschnitt(esc(kat), "",
       skills.map((s) => {
         const a = status(s);
-        return `<div class="skill-zeile"><span>${esc(s)}</span>
+        const eigen = istEigenerSkill(kat, s);
+        return `<div class="skill-zeile"><span>${esc(s)}${eigen ? ` <span class="chip neu">eigen</span>
+            <span class="muted small">${esc(EINST.daten.skill_katalog_eigen[kat][s].join(", "))}</span>` : ""}</span>
+          <span class="skill-aktionen">${eigen ? `<button type="button" class="icon-btn klein" data-skill-weg="${esc(s)}" data-kat="${esc(kat)}" title="Skill entfernen">${ICON.trash}</button>` : ""}
           <div class="segment" data-skill="${esc(s)}">
             <button type="button" data-wert="vorhanden" class="${a === "vorhanden" ? "an ok" : ""}">Vorhanden</button>
             <button type="button" data-wert="weiterbildung" class="${a === "weiterbildung" ? "an" : ""}">Weiterbildung</button>
             <button type="button" data-wert="luecke" class="${a === "luecke" ? "an bad" : ""}">Lücke</button>
-          </div></div>`;
+          </div></span></div>`;
       }).join(""))).join("")}
-    <p class="muted small">Neue Skills für den Katalog (Synonyme fürs Matching) werden weiterhin in <code>skill_radar.py</code> gepflegt.</p>
   </div>`;
 }
 
@@ -342,6 +401,15 @@ function verdrahte(root) {
     if (!b) return;
     einstSet(seg.dataset.segment, b.dataset.wert);
     $$("button", seg).forEach((x) => x.classList.toggle("an", x === b));
+  }));
+  $("#sk-add", root)?.addEventListener("click", skillHinzufuegen);
+  $$("#sk-name, #sk-syn", root).forEach((i) => i.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); skillHinzufuegen(); } }));
+  $("#sk-status", root)?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-wert]");
+    if (b) $$("#sk-status button").forEach((x) => x.className = x === b ? "an" + ({ vorhanden: " ok", luecke: " bad" }[b.dataset.wert] || "") : "");
+  });
+  $$("[data-skill-weg]", root).forEach((b) => b.addEventListener("click", () => {
+    if (confirm(`„${b.dataset.skillWeg}“ aus dem Katalog entfernen?`)) skillEntfernen(b.dataset.kat, b.dataset.skillWeg);
   }));
   $$("[data-skill]", root).forEach((seg) => seg.addEventListener("click", (e) => {
     const b = e.target.closest("[data-wert]");

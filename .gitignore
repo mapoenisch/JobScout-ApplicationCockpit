@@ -21,3 +21,14 @@ __pycache__/
 .playwright-mcp/
 skill_report.html
 einstellungen.json.tmp
+
+# Persönliche Stammdaten aus dem Cockpit
+profil.json
+lebenslauf.json
+*.json.tmp
+unterlagen/
+nachweise.json
+
+# Aus dem Cockpit erzeugte PDFs (enthalten persönliche Daten)
+bewerbungen/Lebenslauf_*.pdf
+bewerbungen/Bewerbungsmappe_*.pdf

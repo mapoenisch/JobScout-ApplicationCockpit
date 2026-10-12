@@ -144,7 +144,7 @@ function renderDashboard() {
   const s = state.status;
   const stunde = new Date().getHours();
   const gruss = stunde < 11 ? "Guten Morgen" : stunde < 18 ? "Hallo" : "Guten Abend";
-  setHeader(`${gruss}, Marc`, `Stellen-Stand: ${fmtDatum(s.letzter_lauf)} · ${s.jobs_gesamt} Stellen bewertet`);
+  setHeader(s.vorname ? `${gruss}, ${s.vorname}` : gruss, `Stellen-Stand: ${fmtDatum(s.letzter_lauf)} · ${s.jobs_gesamt} Stellen bewertet`);
 
   const top = state.jobs.filter((j) => j.neu && !j.im_tracker)
     .sort((a, b) => b.score - a.score).slice(0, 6);
