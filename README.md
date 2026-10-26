@@ -313,6 +313,10 @@ unterlagen.py       Zeugnisse & Nachweise, Bewerbungsmappe
 app/                Frontend: index.html, app.css, app.js, einstellungen.js, lebenslauf.js
 ```
 
+**Ablaufdiagramm:** Funktion und Arbeitsweise im Detail (12 Spalten, vom
+Start bis zur Bewerbungsmappe) – [PNG](docs/JobScout-Ablaufdiagramm.png) ·
+[draw.io-Quelle](docs/JobScout-Ablaufdiagramm.drawio)
+
 **Tech-Stack:** Python 3.9+ (nur Standardbibliothek + `requests` für den
 Scraper) · SQLite · Vanilla JavaScript ohne Build-Schritt · Poppler
 (`pdftotext`, `pdftoppm`, `pdfunite`) · Chrome headless · Claude Code CLI
