@@ -35,8 +35,9 @@ import webbrowser
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
+import analyse
 import cv_editor
 import unterlagen
 
@@ -754,6 +755,8 @@ STATISCH = {
                           "application/javascript; charset=utf-8"),
     "/lebenslauf.js": (APP_DIR / "lebenslauf.js",
                        "application/javascript; charset=utf-8"),
+    "/analyse.js": (APP_DIR / "analyse.js",
+                    "application/javascript; charset=utf-8"),
     "/report/jobs": (BASIS / "jobs_report.html", "text/html; charset=utf-8"),
     "/report/skills": (BASIS / "skill_report.html", "text/html; charset=utf-8"),
 }
@@ -816,6 +819,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(cv_editor.cv_api())
             if url.path == "/api/unterlagen":
                 return self._json(unterlagen.unterlagen_api())
+            if url.path == "/api/analyse":
+                return self._json(analyse.uebersicht())
+            if url.path == "/api/analyse/fall":
+                return self._json(analyse.fall_lesen(
+                    parse_qs(url.query).get("id", [""])[0]))
+            if url.path == "/api/analyse/download":
+                rel = parse_qs(url.query).get("pfad", [""])[0]
+                body, typ = analyse.download(rel)
+                self.send_response(200)
+                self.send_header("Content-Type", typ)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Content-Disposition", "attachment; filename*=UTF-8''"
+                                 + quote(Path(rel).name))
+                self.end_headers()
+                return self.wfile.write(body)
             if url.path.startswith("/datei/"):
                 from urllib.parse import unquote
                 body, typ = cv_editor.datei_lesen(unquote(url.path[7:]))
@@ -845,6 +863,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"fehler": "Ungültiges JSON"}, 400)
         pfad = urlparse(self.path).path
         try:
+            if pfad.startswith("/api/analyse/"):
+                return self._json(analyse.aktion(pfad[len("/api/analyse/"):],
+                                                 daten))
             if pfad == "/api/tracker":
                 return self._json(tracker_aktion(daten))
             if pfad == "/api/task":

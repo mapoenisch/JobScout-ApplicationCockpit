@@ -109,6 +109,18 @@ nur mit dem Header `X-JobScout: 1` an (Schutz gegen fremde Webseiten).
 - Merkliste: Stellen auswählen und gesammelt an den Bewerbungs-Workflow
   übergeben
 
+### Analyse
+Die Analyse-Ebene führt eine einzelne Stelle in sechs Schritten zur fertigen Bewerbung – egal ob sie aus der automatischen Suche (Button *Analysieren*), als **PDF-Anzeige** (Stellen → *PDF-Anzeige hochladen*) oder als eingefügter Text kommt.
+
+1. **Stelle** – Anzeige prüfen und bei Bedarf ergänzen.
+2. **Analyse** – Claude extrahiert Rolle, Aufgaben, Anforderungen (muss/kann/persönlich), Konditionen (Gehalt, Remote/Hybrid/Vor Ort, Vertrag, Benefits …) und priorisiert die wichtigsten Fakten gegen deine Wünsche aus dem Profil.
+3. **Vergleich** – bis zu 3 deiner Lebensläufe werden der Stelle gegenübergestellt; die KI empfiehlt den passendsten.
+4. **Lebenslauf** – KI-Vorschläge einzeln annehmen/ablehnen (nichts wird erfunden, Lücken werden nur gemeldet) oder den gesamten Lebenslauf frei bearbeiten.
+5. **Anschreiben** – automatisch erstellen (Geschäftsbriefnorm, Sie-Form), danach den gesamten Text frei bearbeiten.
+6. **Abschluss** – PDFs speichern/herunterladen, Bewerbungsmappe bauen (inkl. Zertifikate/Nachweise), Tracker-Eintrag anlegen oder den Lebenslauf als Stammdaten übernehmen.
+
+Der Tab **Meine Lebensläufe** verwaltet die Bibliothek (bis zu 10 PDF-Uploads oder der Master aus dem Editor). Alles liegt lokal in `analyse/` (nicht im Repo).
+
 ### Pipeline
 
 ![Pipeline](docs/screenshots/11-pipeline.png)

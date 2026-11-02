@@ -243,7 +243,8 @@ function gefilterteJobs() {
 function renderStellen() {
   const quellen = [...new Set(state.jobs.map((j) => j.quelle))].filter(Boolean).sort();
   setHeader("Stellen", `Aus jobs_ranked.csv · Stand ${fmtDatum(state.jobsStand)}`,
-    `<a class="btn" href="/report/jobs" target="_blank">${ICON.ext}HTML-Report</a>
+    `<button class="btn" id="stelle-pdf">${ICON.plus}PDF-Anzeige hochladen</button>
+     <a class="btn" href="/report/jobs" target="_blank">${ICON.ext}HTML-Report</a>
      <button class="btn btn-primary" data-task="scout">${ICON.refresh}Neue Suche starten</button>`);
   const f = state.filter;
   $("#view").innerHTML = `
@@ -268,6 +269,7 @@ function renderStellen() {
   $("#f-neu").addEventListener("change", (e) => { f.nurNeu = e.target.checked; neu(); });
   $("#f-remote").addEventListener("change", (e) => { f.remote = e.target.checked; neu(); });
   $("#f-tracker").addEventListener("change", (e) => { f.ohneTracker = e.target.checked; neu(); });
+  $("#stelle-pdf").addEventListener("click", () => anzeigeDialog("pdf"));
   zeichneJobs();
 }
 
@@ -302,6 +304,7 @@ function jobZeile(j) {
         `<li class="${/\(\+/.test(g) ? "plus" : /\(-/.test(g) ? "minus" : ""}">${esc(g)}</li>`).join("")}</ul>
     </div>
     <button class="btn btn-sm" data-gruende="${j.id}">Warum?</button>
+    <button class="btn btn-sm btn-soft" data-analyse="${j.id}">Analysieren</button>
     <a class="btn btn-sm" href="${safeUrl(j.link)}" target="_blank" rel="noopener">${ICON.ext}Anzeige</a>
   </div>`;
 }
@@ -691,12 +694,15 @@ function dialog(html, init) {
 
 /* ---------- Globale Klicks ---------- */
 document.addEventListener("click", async (e) => {
-  const el = e.target.closest("[data-merken],[data-gruende],[data-task],[data-workflow],[data-oeffnen],[data-finder],[data-raus],[data-bearbeiten],[data-docs]");
+  const el = e.target.closest("[data-merken],[data-gruende],[data-analyse],[data-task],[data-workflow],[data-oeffnen],[data-finder],[data-raus],[data-bearbeiten],[data-docs]");
   if (!el) return;
   const ds = el.dataset;
   if (ds.merken !== undefined) {
     toggleAuswahl(+ds.merken);
     if ($("#job-liste")) zeichneJobs(); else route();
+  } else if (ds.analyse !== undefined) {
+    const job = state.jobs.find((x) => x.id === +ds.analyse);
+    if (job) stelleAnalysieren(job);
   } else if (ds.gruende !== undefined) {
     const id = +ds.gruende;
     state.offen.has(id) ? state.offen.delete(id) : state.offen.add(id);
