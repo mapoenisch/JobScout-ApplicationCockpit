@@ -17,6 +17,7 @@ Nur Standardbibliothek.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import os
 import re
@@ -24,6 +25,7 @@ import shutil
 import subprocess
 import tempfile
 import unicodedata
+import zipfile
 from datetime import date
 from pathlib import Path
 
@@ -38,6 +40,7 @@ NACHWEIS_DIR = UNTERLAGEN_DIR / "nachweise"
 UPLOAD_ORDNER = {"zertifikate": ZERT_DIR, "nachweise": NACHWEIS_DIR}
 UPLOAD_TYPEN = {b"%PDF": ".pdf", b"\x89PNG": ".png", b"\xff\xd8\xff": ".jpg"}
 MAX_PDF_BYTES = 15 * 1024 * 1024
+WORD_ENDUNGEN = (".docx", ".doc")
 
 # ============================================================
 # 1. DATENMODELL (Vorlage = Standardwerte + erlaubte Struktur)
@@ -189,7 +192,10 @@ def pdf_quellen() -> list[dict]:
     for ordner in (BASIS, BEWERBUNGEN_DIR):
         if not ordner.exists():
             continue
-        for p in sorted(ordner.glob("*.pdf"), key=lambda x: -x.stat().st_mtime):
+        dateien = [p for p in ordner.iterdir() if p.is_file()
+                   and p.suffix.lower() in (".pdf",) + WORD_ENDUNGEN
+                   and not p.name.startswith("~$")]
+        for p in sorted(dateien, key=lambda x: -x.stat().st_mtime):
             rel = unicodedata.normalize("NFC", str(p.relative_to(BASIS)))
             out.append({"pfad": rel, "name": unicodedata.normalize("NFC", p.name),
                         "_echt": p})
@@ -235,6 +241,196 @@ _REPARATUR = [
 ]
 
 
+# ---- Word -> PDF (überall, wo Uploads PDFs erwarten) ----
+
+WORD_SKRIPT = """on run argv
+  tell application "Microsoft Word"
+    set dok to open file name (POSIX file (item 1 of argv) as text) with read only
+    save as dok file name (POSIX file (item 2 of argv) as text) file format format PDF
+    close dok saving no
+  end tell
+end run"""
+
+
+def word_endung(roh: bytes) -> str | None:
+    """".docx" / ".doc", wenn die Bytes ein Word-Dokument sind, sonst None."""
+    if roh.startswith(b"\xd0\xcf\x11\xe0"):
+        return ".doc"
+    if roh.startswith(b"PK\x03\x04"):
+        try:
+            with zipfile.ZipFile(io.BytesIO(roh)) as z:
+                if "word/document.xml" in z.namelist():
+                    return ".docx"
+        except zipfile.BadZipFile:
+            pass
+    return None
+
+
+def word_zu_pdf(quelle: Path, ziel: Path):
+    """Erst Microsoft Word (originalgetreu), sonst textutil + Chrome."""
+    if Path("/Applications/Microsoft Word.app").exists():
+        try:
+            subprocess.run(["osascript", "-e", WORD_SKRIPT, str(quelle), str(ziel)],
+                           capture_output=True, timeout=90)
+        except subprocess.TimeoutExpired:
+            pass
+        if ziel.exists() and ziel.stat().st_size > 500:
+            return
+    chrome = _chrome()
+    if not chrome:
+        raise RuntimeError("Für Word-Dateien wird Microsoft Word oder Google Chrome gebraucht")
+    r = subprocess.run(["textutil", "-convert", "html", "-stdout", str(quelle)],
+                       capture_output=True, timeout=60)
+    if r.returncode != 0:
+        raise RuntimeError(f"{quelle.name} konnte nicht umgewandelt werden")
+    html = r.stdout.decode("utf-8", "replace").replace(
+        "</head>", "<style>@page { size: A4; margin: 20mm 22mm; } body { "
+        "font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; }"
+        "</style></head>", 1)
+    _drucke(chrome, html, ziel)
+
+
+TEXT_ENDUNGEN = (".md", ".markdown", ".txt")
+BILD_SIGNATUREN = {b"\x89PNG": "png", b"\xff\xd8\xff": "jpeg"}
+
+
+def _md_zu_html(text: str) -> str:
+    """Kleiner Markdown-Umwandler (Überschriften, Listen, fett/kursiv, Code)."""
+    import html as _html
+
+    def inline(z: str) -> str:
+        z = _html.escape(z)
+        z = re.sub(r"`([^`]+)`", r"<code>\1</code>", z)
+        z = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", z)
+        z = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", z)
+        return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", z)
+
+    aus, liste, absatz, code = [], None, [], False
+
+    def schliesse():
+        nonlocal liste, absatz
+        if absatz:
+            aus.append("<p>" + " ".join(absatz) + "</p>")
+            absatz = []
+        if liste:
+            aus.append(f"</{liste}>")
+            liste = None
+
+    for zeile in text.replace("\r\n", "\n").split("\n"):
+        if zeile.strip().startswith("```"):
+            schliesse()
+            aus.append("</pre>" if code else "<pre>")
+            code = not code
+            continue
+        if code:
+            aus.append(_html.escape(zeile))
+            continue
+        h = re.match(r"^(#{1,6})\s+(.*)$", zeile)
+        li = re.match(r"^\s*([-*+]|\d+[.)])\s+(.*)$", zeile)
+        if h:
+            schliesse()
+            aus.append(f"<h{len(h[1])}>{inline(h[2])}</h{len(h[1])}>")
+        elif li:
+            art = "ol" if li[1][0].isdigit() else "ul"
+            if liste != art:
+                schliesse()
+                aus.append(f"<{art}>")
+                liste = art
+            aus.append(f"<li>{inline(li[2])}</li>")
+        elif not zeile.strip():
+            schliesse()
+        elif re.match(r"^\s*([-*_]\s*){3,}$", zeile):
+            schliesse()
+            aus.append("<hr>")
+        else:
+            if liste:
+                schliesse()
+            absatz.append(inline(zeile.strip()))
+    schliesse()
+    if code:
+        aus.append("</pre>")
+    return "\n".join(aus)
+
+
+_DOK_CSS = ("@page { size: A4; margin: 20mm 22mm; } body { font-family: Helvetica, "
+            "Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; } "
+            "h1,h2,h3 { margin: 1.1em 0 .4em; } pre, code { font-family: Menlo, "
+            "monospace; font-size: 9pt; } pre { white-space: pre-wrap; }")
+
+
+def _text_zu_pdf(text: str, ziel: Path, markdown: bool):
+    chrome = _chrome()
+    if not chrome:
+        raise RuntimeError("Für Text-/Markdown-Dateien wird Google Chrome gebraucht")
+    import html as _html
+    koerper = _md_zu_html(text) if markdown else "<pre>" + _html.escape(text) + "</pre>"
+    _drucke(chrome, f'<!doctype html><html><head><meta charset="utf-8"><style>'
+                    f"{_DOK_CSS}</style></head><body>{koerper}</body></html>", ziel)
+
+
+def _bild_zu_pdf_bytes(roh: bytes, mime: str, ziel: Path):
+    chrome = _chrome()
+    if not chrome:
+        raise RuntimeError("Für Bilder wird Google Chrome gebraucht")
+    b64 = base64.b64encode(roh).decode()
+    _drucke(chrome, '<!doctype html><html><head><meta charset="utf-8"><style>'
+                    "@page { size: A4; margin: 0; } html, body { margin: 0; }"
+                    ".s { width: 210mm; height: 296mm; display: flex; align-items: center;"
+                    " justify-content: center; padding: 8mm; box-sizing: border-box; }"
+                    "img { max-width: 100%; max-height: 100%; object-fit: contain; }"
+                    f'</style></head><body><div class="s"><img src="data:image/{mime};'
+                    f'base64,{b64}"></div></body></html>', ziel)
+
+
+def als_pdf_bytes(roh: bytes, name: str = "Dokument") -> bytes:
+    """PDF bleibt PDF; Word (docx/doc), Markdown/Text (md/txt) und Bilder
+    (png/jpg) werden zu PDF umgewandelt."""
+    if roh.startswith(b"%PDF"):
+        return roh
+    endung = word_endung(roh)
+    mime = next((m for sig, m in BILD_SIGNATUREN.items() if roh.startswith(sig)), None)
+    text_endung = name.lower().endswith(TEXT_ENDUNGEN)
+    if not (endung or mime or text_endung):
+        raise ValueError(f"{name}: bitte PDF, Word (docx/doc), Markdown (md), PNG oder JPG wählen")
+    with tempfile.TemporaryDirectory() as tmp:
+        ziel = Path(tmp) / "ziel.pdf"
+        if endung:
+            quelle = Path(tmp) / f"quelle{endung}"
+            quelle.write_bytes(roh)
+            word_zu_pdf(quelle, ziel)
+        elif mime:
+            _bild_zu_pdf_bytes(roh, mime, ziel)
+        else:
+            try:
+                text = roh.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                text = roh.decode("latin-1")
+            if "\x00" in text:
+                raise ValueError(f"{name}: keine gültige Textdatei")
+            _text_zu_pdf(text, ziel, not name.lower().endswith(".txt"))
+        if not ziel.exists():
+            raise RuntimeError(f"{name} konnte nicht in PDF umgewandelt werden")
+        return ziel.read_bytes()
+
+
+def _ocr_pdf(pdf: Path) -> str:
+    """Texterkennung für Scans/Bilder-PDFs (macOS Vision, erste 3 Seiten)."""
+    skript = Path(__file__).with_name("ocr.swift")
+    tool = shutil.which("pdftoppm") or "/opt/homebrew/bin/pdftoppm"
+    if not skript.exists() or not Path(tool).exists() or not shutil.which("swift"):
+        return ""
+    teile = []
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run([tool, "-png", "-r", "200", "-l", "3", str(pdf), f"{tmp}/s"],
+                       capture_output=True, timeout=90)
+        for bild in sorted(Path(tmp).glob("s*.png")):
+            r = subprocess.run(["swift", str(skript), str(bild)],
+                               capture_output=True, timeout=180)
+            if r.returncode == 0:
+                teile.append(r.stdout.decode("utf-8", "replace"))
+    return "\n\n".join(teile)
+
+
 def pdf_text(pdf: Path) -> str:
     tool = _pdftotext()
     if not tool:
@@ -250,8 +446,10 @@ def pdf_text(pdf: Path) -> str:
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     if len(text) < 40:
-        raise RuntimeError("Im PDF steht kaum Text – vermutlich ein Scan/Bild. "
-                           "Für ATS brauchst du ein PDF mit echtem Text.")
+        text = re.sub(r"\n{3,}", "\n\n", _ocr_pdf(pdf)).strip()   # Scan/Bild -> OCR
+    if len(text) < 40:
+        raise RuntimeError("Im PDF/Bild konnte kaum Text erkannt werden. "
+                           "Bitte ein PDF mit echtem Text oder ein schärferes Bild nehmen.")
     return text[:60000]
 
 
@@ -346,17 +544,20 @@ def importiere_pdfs(daten: dict) -> dict:
                 raise ValueError(f"{d.get('name')}: Datei beschädigt")
             if len(roh) > MAX_PDF_BYTES:
                 raise ValueError(f"{d.get('name')}: größer als 15 MB")
-            if not roh.startswith(b"%PDF"):
-                raise ValueError(f"{d.get('name')}: keine PDF-Datei")
             p = Path(tmp) / f"upload_{i}.pdf"
-            p.write_bytes(roh)
+            p.write_bytes(als_pdf_bytes(roh, d.get("name") or "Datei"))
             texte.append((d.get("name") or p.name, pdf_text(p)))
         erlaubt = {q["pfad"]: q["_echt"] for q in pdf_quellen()}
         for rel in (daten.get("pfade") or [])[:5]:
             rel = unicodedata.normalize("NFC", str(rel))
             if rel not in erlaubt:
                 raise ValueError(f"{rel}: nicht erlaubt")
-            texte.append((Path(rel).name, pdf_text(erlaubt[rel])))
+            quelle = erlaubt[rel]
+            if quelle.suffix.lower() in WORD_ENDUNGEN:
+                p = Path(tmp) / f"projekt_{len(texte)}.pdf"
+                word_zu_pdf(quelle, p)
+                quelle = p
+            texte.append((Path(rel).name, pdf_text(quelle)))
     if not texte:
         raise ValueError("Keine PDF ausgewählt")
     gesamt = "\n\n".join(f"===== DOKUMENT: {n} =====\n{t}" for n, t in texte)
@@ -470,9 +671,11 @@ def lade_hoch(daten: dict) -> dict:
         raise ValueError("Datei beschädigt")
     if len(roh) > MAX_PDF_BYTES:
         raise ValueError("Datei größer als 15 MB")
+    if word_endung(roh) or (daten.get("name") or "").lower().endswith(TEXT_ENDUNGEN):
+        roh = als_pdf_bytes(roh, daten.get("name") or "Datei")   # Word/Markdown -> PDF
     endung = next((e for sig, e in UPLOAD_TYPEN.items() if roh.startswith(sig)), None)
     if not endung:
-        raise ValueError("Nur PDF, PNG oder JPG erlaubt")
+        raise ValueError("Nur PDF, Word (docx/doc), Markdown (md), PNG oder JPG erlaubt")
     ordner = UPLOAD_ORDNER.get(daten.get("ordner") or "zertifikate", ZERT_DIR)
     ordner.mkdir(parents=True, exist_ok=True)
     ziel = ordner / _sicherer_name(daten.get("name") or "", endung, ordner)

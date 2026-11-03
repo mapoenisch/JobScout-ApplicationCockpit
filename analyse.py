@@ -196,8 +196,7 @@ def _pdf_aus_b64(d: dict, ordner: Path, praefix: str) -> tuple[Path, str]:
         raise ValueError("Datei beschädigt")
     if len(roh) > cv.MAX_PDF_BYTES:
         raise ValueError("Datei ist größer als 15 MB")
-    if not roh.startswith(b"%PDF"):
-        raise ValueError("Bitte eine PDF-Datei wählen")
+    roh = cv.als_pdf_bytes(roh, d.get("name") or "Datei")   # Word -> PDF
     ordner.mkdir(parents=True, exist_ok=True)
     ziel = ordner / f"{praefix}.pdf"
     ziel.write_bytes(roh)

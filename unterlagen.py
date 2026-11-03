@@ -136,34 +136,8 @@ def _bild_zu_pdf(bild: Path, ziel: Path):
         "</div></body></html>", ziel)
 
 
-WORD_SKRIPT = """on run argv
-  tell application "Microsoft Word"
-    set dok to open file name (POSIX file (item 1 of argv) as text) with read only
-    save as dok file name (POSIX file (item 2 of argv) as text) file format format PDF
-    close dok saving no
-  end tell
-end run"""
-
-
 def _docx_zu_pdf(docx: Path, ziel: Path):
-    """Erst Microsoft Word (originalgetreu), sonst textutil + Chrome."""
-    if Path("/Applications/Microsoft Word.app").exists():
-        try:
-            subprocess.run(["osascript", "-e", WORD_SKRIPT, str(docx), str(ziel)],
-                           capture_output=True, timeout=90)
-        except subprocess.TimeoutExpired:
-            pass
-        if ziel.exists() and ziel.stat().st_size > 500:
-            return
-    r = subprocess.run(["textutil", "-convert", "html", "-stdout", str(docx)],
-                       capture_output=True, timeout=60)
-    if r.returncode != 0:
-        raise RuntimeError(f"{docx.name} konnte nicht umgewandelt werden")
-    html = r.stdout.decode("utf-8", "replace").replace(
-        "</head>", "<style>@page { size: A4; margin: 20mm 22mm; } body { "
-        "font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; }"
-        "</style></head>", 1)
-    _html_zu_pdf(html, ziel)
+    cv.word_zu_pdf(docx, ziel)
 
 
 def _deckblatt(daten: dict, inhalt: list[str]) -> str:

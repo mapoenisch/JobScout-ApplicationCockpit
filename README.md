@@ -121,6 +121,8 @@ Die Analyse-Ebene führt eine einzelne Stelle in sechs Schritten zur fertigen Be
 
 Der Tab **Meine Lebensläufe** verwaltet die Bibliothek (bis zu 10 PDF-Uploads oder der Master aus dem Editor). Alles liegt lokal in `analyse/` (nicht im Repo).
 
+Überall, wo das Cockpit PDFs annimmt (Lebensläufe, Stellenanzeigen, Zertifikate, Nachweise, Editor-Import), kannst du auch **Word-Dateien (docx/doc)**, **Markdown/Text (md, txt)** und **Bilder (png, jpg)** hochladen – sie werden automatisch in PDF umgewandelt (Word mit Microsoft Word, sonst `textutil` + Chrome; Markdown und Bilder per Chrome). Bilder ohne Text werden per macOS-Texterkennung (`ocr.swift`, Vision) ausgelesen.
+
 ### Pipeline
 
 ![Pipeline](docs/screenshots/11-pipeline.png)

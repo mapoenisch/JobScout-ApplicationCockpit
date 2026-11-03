@@ -243,7 +243,7 @@ function gefilterteJobs() {
 function renderStellen() {
   const quellen = [...new Set(state.jobs.map((j) => j.quelle))].filter(Boolean).sort();
   setHeader("Stellen", `Aus jobs_ranked.csv · Stand ${fmtDatum(state.jobsStand)}`,
-    `<button class="btn" id="stelle-pdf">${ICON.plus}PDF-Anzeige hochladen</button>
+    `<button class="btn" id="stelle-pdf">${ICON.plus}Anzeige hochladen (PDF, Word, MD, Bild)</button>
      <a class="btn" href="/report/jobs" target="_blank">${ICON.ext}HTML-Report</a>
      <button class="btn btn-primary" data-task="scout">${ICON.refresh}Neue Suche starten</button>`);
   const f = state.filter;

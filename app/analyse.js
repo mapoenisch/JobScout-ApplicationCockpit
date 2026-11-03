@@ -65,7 +65,7 @@ function zeichneUebersicht() {
   const u = AN.uebersicht;
   setHeader("Analyse", "Stellen verstehen, Lebenslauf anpassen, Anschreiben erstellen",
     `<button class="btn" id="an-text">${ICON.doc}Text einfügen</button>
-     <button class="btn btn-primary" id="an-pdf">${AN_ICON.upload}PDF-Anzeige hochladen</button>`);
+     <button class="btn btn-primary" id="an-pdf">${AN_ICON.upload}Anzeige hochladen (PDF, Word, MD, Bild)</button>`);
   $("#view").innerHTML = `
     <div class="tabs">
       <button class="tab ${AN.tab === "analysen" ? "active" : ""}" data-antab="analysen">Analysen (${u.faelle.length})</button>
@@ -121,10 +121,10 @@ function zeichneCvBibliothek() {
       <div class="card-head"><h2>Lebensläufe hochladen</h2><div class="spacer"></div>
         <span class="chip ${voll ? "warn" : ""}">${u.cvs.length} / ${u.max_cvs} belegt</span></div>
       <p class="muted" style="margin:0 0 12px">Lege bis zu ${u.max_cvs} Lebenslauf-Varianten an (z. B. „Vertrieb“, „RevOps“, „Quereinstieg“). In einer Analyse stellst du bis zu ${u.max_vergleich} davon der Stelle gegenüber.</p>
-      ${!u.claude ? `<div class="hinweis">${ICON.bell}<div>Claude Code wurde nicht gefunden – das Auslesen von PDFs braucht <code>claude</code>.</div></div>` : ""}
+      ${!u.claude ? `<div class="hinweis">${ICON.bell}<div>Claude Code wurde nicht gefunden – das Auslesen hochgeladener Dateien braucht <code>claude</code>.</div></div>` : ""}
       <div class="an-cv-aktion">
-        <label class="dropzone" id="an-cv-drop" ${voll ? 'style="opacity:.5;pointer-events:none"' : ""}>${AN_ICON.upload}<span><b>PDF hierher ziehen</b> oder klicken</span>
-          <input type="file" id="an-cv-datei" accept="application/pdf,.pdf" multiple hidden></label>
+        <label class="dropzone" id="an-cv-drop" ${voll ? 'style="opacity:.5;pointer-events:none"' : ""}>${AN_ICON.upload}<span><b>PDF, Word, Markdown oder Bild hierher ziehen</b> oder klicken</span>
+          <input type="file" id="an-cv-datei" accept="application/pdf,.pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" multiple hidden></label>
         <button class="btn btn-soft" id="an-cv-master" ${voll || !u.master_vorhanden ? "disabled" : ""} title="${u.master_vorhanden ? "" : "Im Lebenslauf-Editor ist noch nichts hinterlegt"}">Master-Lebenslauf aus dem Editor übernehmen</button>
       </div>
       <div id="an-cv-status"></div>
@@ -166,8 +166,8 @@ function cvKarte(c) {
 }
 
 async function cvHochladen(dateien) {
-  const pdfs = dateien.filter((f) => /\.pdf$/i.test(f.name));
-  if (!pdfs.length) { toast("Bitte PDF-Dateien wählen", true); return; }
+  const pdfs = dateien.filter((f) => /\.(pdf|docx?|md|txt|png|jpe?g)$/i.test(f.name));
+  if (!pdfs.length) { toast("Bitte PDF, Word, Markdown oder Bilder wählen", true); return; }
   const status = $("#an-cv-status");
   const frei = AN.uebersicht.max_cvs - AN.uebersicht.cvs.length;
   if (pdfs.length > frei) toast(`Nur noch ${frei} Platz – die übrigen Dateien werden übersprungen`, true);
@@ -220,15 +220,15 @@ function cvUmbenennen(id) {
 function anzeigeDialog(modus = "pdf") {
   dialog(`<div class="dialog-body">
     <h2>Stellenanzeige hinzufügen</h2>
-    <div class="segment" id="an-modus"><button data-m="pdf" class="${modus === "pdf" ? "an" : ""}">PDF hochladen</button><button data-m="text" class="${modus === "text" ? "an" : ""}">Text einfügen</button></div>
+    <div class="segment" id="an-modus"><button data-m="pdf" class="${modus === "pdf" ? "an" : ""}">Datei hochladen</button><button data-m="text" class="${modus === "text" ? "an" : ""}">Text einfügen</button></div>
     <div id="an-modus-inhalt"></div><div id="an-dlg-status"></div></div>
     <div class="dialog-foot"><button class="btn" data-schliessen>Abbrechen</button></div>`, (d) => {
     const zeige = (m) => {
       $$("#an-modus button", d).forEach((b) => b.classList.toggle("an", b.dataset.m === m));
       $("#an-modus-inhalt", d).innerHTML = m === "pdf" ? `
-        <p class="muted" style="margin:0">Die Anzeige wird lokal ausgelesen und danach analysiert. Das PDF braucht echten Text (kein Scan).</p>
-        <label class="dropzone" id="an-a-drop">${AN_ICON.upload}<span><b>PDF hierher ziehen</b> oder klicken</span>
-          <input type="file" id="an-a-datei" accept="application/pdf,.pdf" hidden></label>` : `
+        <p class="muted" style="margin:0">Die Anzeige wird lokal ausgelesen und danach analysiert. Word-, Markdown- und Bilddateien werden automatisch in PDF umgewandelt (Bilder per Texterkennung ausgelesen).</p>
+        <label class="dropzone" id="an-a-drop">${AN_ICON.upload}<span><b>PDF, Word, Markdown oder Bild hierher ziehen</b> oder klicken</span>
+          <input type="file" id="an-a-datei" accept="application/pdf,.pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" hidden></label>` : `
         <div class="an-form-zeile"><label class="feld">Titel (optional)<input type="text" id="an-t-titel"></label>
           <label class="feld">Firma (optional)<input type="text" id="an-t-firma"></label></div>
         <label class="feld">Anzeigentext<textarea id="an-t-text" rows="9" placeholder="Text der Stellenanzeige hier einfügen …"></textarea></label>
@@ -253,7 +253,7 @@ async function legeAn(d, datei, daten) {
   const status = $("#an-dlg-status", d);
   try {
     if (datei) {
-      if (!/\.pdf$/i.test(datei.name)) throw new Error("Bitte eine PDF-Datei wählen");
+      if (!/\.(pdf|docx?|md|txt|png|jpe?g)$/i.test(datei.name)) throw new Error("Bitte PDF, Word, Markdown oder Bild (PNG/JPG) wählen");
       status.innerHTML = `<div class="hinweis info"><span class="an-spin"></span><div>Anzeige wird ausgelesen …</div></div>`;
       daten = { art: "pdf", name: datei.name, b64: await alsBase64(datei) };
     }

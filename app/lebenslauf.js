@@ -699,10 +699,10 @@ function druckeCv() {
 function importDialog() {
   dialog(`<div class="dialog-body">
     <h2>Lebenslauf aus PDF übernehmen</h2>
-    <p class="muted">Wähle ein oder mehrere PDFs (z. B. deinen aktuellen CV und den LinkedIn-Profil-Export). Der Text wird lokal ausgelesen und von Claude strukturiert – kaputte Zeichen werden repariert. Erfunden wird nichts.</p>
+    <p class="muted">Wähle ein oder mehrere Dateien (PDF, Word, Markdown, Bild) (z. B. deinen aktuellen CV und den LinkedIn-Profil-Export). Der Text wird lokal ausgelesen und von Claude strukturiert – kaputte Zeichen werden repariert. Erfunden wird nichts.</p>
     ${!CV.claude ? `<div class="hinweis">${ICON.bell}<div>Claude Code wurde nicht gefunden – der Import braucht <code>claude</code>.</div></div>` : ""}
-    <label class="dropzone" id="imp-drop">${ICON_CV.upload}<span><b>PDF hierher ziehen</b> oder klicken zum Auswählen</span>
-      <input type="file" id="imp-datei" accept="application/pdf,.pdf" multiple hidden></label>
+    <label class="dropzone" id="imp-drop">${ICON_CV.upload}<span><b>PDF, Word, Markdown oder Bild hierher ziehen</b> oder klicken zum Auswählen</span>
+      <input type="file" id="imp-datei" accept="application/pdf,.pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" multiple hidden></label>
     <div id="imp-dateien" class="imp-dateien"></div>
     ${CV.pdfs.length ? `<div class="vorschau-titel">Oder aus dem Projektordner</div>
       <div class="imp-liste">${CV.pdfs.map((p) => `<label class="check"><input type="checkbox" value="${esc(p.pfad)}" data-imp-pfad> ${esc(p.pfad)}</label>`).join("")}</div>` : ""}
@@ -712,7 +712,7 @@ function importDialog() {
     <button class="btn btn-primary" id="imp-start" ${CV.claude ? "" : "disabled"}>${ICON.spark}Mit Claude auslesen</button></div>`, (d) => {
     const dateien = [];
     const zeige = () => { $("#imp-dateien", d).innerHTML = dateien.map((f) => `<span class="chip">${ICON.doc}${esc(f.name)}</span>`).join(""); };
-    const hinzu = (liste) => { [...liste].filter((f) => /\.pdf$/i.test(f.name)).forEach((f) => dateien.push(f)); zeige(); };
+    const hinzu = (liste) => { [...liste].filter((f) => /\.(pdf|docx?|md|txt|png|jpe?g)$/i.test(f.name)).forEach((f) => dateien.push(f)); zeige(); };
     const drop = $("#imp-drop", d);
     $("#imp-datei", d).addEventListener("change", (e) => hinzu(e.target.files));
     drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("aktiv"); });
@@ -809,13 +809,13 @@ function zertifikatKarte(z, i, n) {
   const mini = z.vorschau
     ? `<button type="button" class="zert-mini" data-oeffnen="${esc(z.datei)}" title="Datei öffnen"><img src="${dateiUrl(z.vorschau)}" alt="Vorschau ${esc(z.name)}" loading="lazy">${pdf ? '<span class="chip">PDF</span>' : ""}</button>`
     : `<label class="zert-mini leer-mini" title="PNG, JPG oder PDF hochladen">${ICON_CV.upload}<span>Datei hochladen</span>
-        <input type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" data-upload="${i}" hidden></label>`;
+        <input type="file" accept=".pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" data-upload="${i}" hidden></label>`;
   return `<div class="eintrag zert">
     ${eintragKopf("c", "zertifikate", i, z.name, n)}
     <div class="zert-grid">
       <div class="zert-links">${mini}
         ${z.datei ? `<div class="zert-knoepfe">
-          <label class="btn btn-sm" title="Datei ersetzen">${ICON_CV.upload}Ersetzen<input type="file" accept=".pdf,.png,.jpg,.jpeg" data-upload="${i}" hidden></label>
+          <label class="btn btn-sm" title="Datei ersetzen">${ICON_CV.upload}Ersetzen<input type="file" accept=".pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" data-upload="${i}" hidden></label>
           <button type="button" class="btn btn-sm btn-soft" data-auslesen="${i}" ${CV.claude ? "" : "disabled"} title="Name, Aussteller, Datum, Nummer und Skills aus der Datei übernehmen">${ICON.spark}Auslesen</button>
         </div>` : ""}
       </div>
@@ -834,8 +834,8 @@ function extrasHtml(teile = ["zertifikate", "projekte", "eigene"]) {
   const z = CV.cv.zertifikate, pr = CV.cv.projekte, ei = CV.cv.eigene;
   const html = {
     zertifikate: `<h3 class="extra-titel">Zertifikate</h3>
-      <label class="dropzone klein" data-dropzone>${ICON_CV.upload}<span><b>Zertifikate hochladen</b> – PNG, JPG oder PDF hierher ziehen oder klicken. Für jede Datei wird ein Eintrag angelegt.</span>
-        <input type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple data-upload-neu hidden></label>
+      <label class="dropzone klein" data-dropzone>${ICON_CV.upload}<span><b>Zertifikate hochladen</b> – PNG, JPG, PDF, Word, Markdown oder Bild hierher ziehen oder klicken. Für jede Datei wird ein Eintrag angelegt.</span>
+        <input type="file" accept=".pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple data-upload-neu hidden></label>
       ${z.map((e, i) => zertifikatKarte(e, i, z.length)).join("")}
       ${addKnopf("c", "zertifikate", "Zertifikat ohne Datei hinzufügen")}`,
     projekte: `<h3 class="extra-titel">Projekte</h3>
@@ -853,7 +853,7 @@ function extrasHtml(teile = ["zertifikate", "projekte", "eigene"]) {
 }
 
 async function ladeDateiHoch(datei) {
-  if (!/\.(pdf|png|jpe?g)$/i.test(datei.name)) throw new Error(`${datei.name}: nur PDF, PNG oder JPG`);
+  if (!/\.(pdf|docx?|md|txt|png|jpe?g)$/i.test(datei.name)) throw new Error(`${datei.name}: nur PDF, Word, Markdown, PNG oder JPG`);
   return api("/api/unterlagen/upload", { name: datei.name, b64: await alsBase64(datei) });
 }
 
@@ -1048,14 +1048,14 @@ function nachweisKarte(x, i, n) {
   const mini = x.vorschau
     ? `<button type="button" class="zert-mini" data-oeffnen="${esc(x.datei)}" title="Datei öffnen"><img src="${dateiUrl(x.vorschau)}" alt="Vorschau ${esc(x.titel)}" loading="lazy">${pdf ? '<span class="chip">PDF</span>' : ""}</button>`
     : `<label class="zert-mini leer-mini">${ICON_CV.upload}<span>Datei hochladen</span>
-        <input type="file" accept=".pdf,.png,.jpg,.jpeg" data-n-upload="${i}" hidden></label>`;
+        <input type="file" accept=".pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" data-n-upload="${i}" hidden></label>`;
   const referenz = x.typ === "Referenz";
   return `<div class="eintrag zert">
     ${eintragKopf("n", "nachweise", i, [x.typ, x.titel].filter(Boolean).join(" · "), n)}
     <div class="zert-grid">
       <div class="zert-links">${mini}
         ${x.datei ? `<div class="zert-knoepfe">
-          <label class="btn btn-sm">${ICON_CV.upload}Ersetzen<input type="file" accept=".pdf,.png,.jpg,.jpeg" data-n-upload="${i}" hidden></label>
+          <label class="btn btn-sm">${ICON_CV.upload}Ersetzen<input type="file" accept=".pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" data-n-upload="${i}" hidden></label>
           <button type="button" class="btn btn-sm btn-soft" data-n-auswerten="${i}" ${CV.claude ? "" : "disabled"}>${ICON.spark}Auswerten</button>
         </div>` : ""}
       </div>
@@ -1082,8 +1082,8 @@ function untNachweise() {
   return `<div class="einst-spalte" style="max-width:980px">
     ${fehlt.length ? `<div class="hinweis info">${ICON.bell}<div>Typisch für deutsche Bewerbungen, aber noch nicht hinterlegt: <b>${fehlt.join(", ")}</b>.</div></div>` : ""}
     <div class="card">
-      <label class="dropzone klein" data-n-dropzone>${ICON_CV.upload}<span><b>Zeugnisse & Nachweise hochladen</b> – PNG, JPG oder PDF hierher ziehen oder klicken. Die Art wird aus dem Dateinamen geraten.</span>
-        <input type="file" accept=".pdf,.png,.jpg,.jpeg" multiple data-n-upload-neu hidden></label>
+      <label class="dropzone klein" data-n-dropzone>${ICON_CV.upload}<span><b>Zeugnisse & Nachweise hochladen</b> – PNG, JPG, PDF, Word, Markdown oder Bild hierher ziehen oder klicken. Die Art wird aus dem Dateinamen geraten.</span>
+        <input type="file" accept=".pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" multiple data-n-upload-neu hidden></label>
       ${l.map((x, i) => nachweisKarte(x, i, l.length)).join("")}
       ${addKnopf("n", "nachweise", "Eintrag ohne Datei hinzufügen (z. B. Referenz)")}
       <datalist id="n-typen">${UNT.typen.map((t) => `<option value="${esc(t)}">`).join("")}</datalist>
@@ -1093,7 +1093,7 @@ function untNachweise() {
 
 function verdrahteNachweise(root, neuZeichnen) {
   const hoch = (f) => {
-    if (!/\.(pdf|png|jpe?g)$/i.test(f.name)) throw new Error(`${f.name}: nur PDF, PNG oder JPG`);
+    if (!/\.(pdf|docx?|md|txt|png|jpe?g)$/i.test(f.name)) throw new Error(`${f.name}: nur PDF, Word, Markdown, PNG oder JPG`);
     return alsBase64(f).then((b64) => api("/api/unterlagen/upload", { name: f.name, b64, ordner: "nachweise" }));
   };
   const neue = async (dateien) => {
