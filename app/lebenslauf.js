@@ -161,7 +161,7 @@ function profilVollstaendig(p = CV.profil) {
 async function renderProfil() {
   setHeader("Mein Profil", "Persönliche Daten – eine Quelle für Lebenslauf, Anschreiben und Interview-Prep",
     `<span class="chip ok" id="cv-status">Gespeichert</span>
-     <button class="btn" id="pr-import">${ICON_CV.upload}Aus PDF übernehmen</button>
+     <button class="btn" id="pr-import">${ICON_CV.upload}Aus CV übernehmen</button>
      <a class="btn btn-primary" href="#lebenslauf">${ICON.doc}Zum Lebenslauf-Editor</a>`);
   if (!(await ladeCv())) return;
   $("#pr-import").onclick = importDialog;
@@ -253,7 +253,7 @@ function abschnittCv(titel, text, inhalt, rechts = "") {
 async function renderLebenslauf() {
   setHeader("Lebenslauf-Editor", "ATS-lesbare Lebensläufe – aus deinen PDFs importiert, live in der Vorschau",
     `<span class="chip ok" id="cv-status">Gespeichert</span>
-     <button class="btn" id="cv-import">${ICON_CV.upload}PDF importieren</button>
+     <button class="btn" id="cv-import">${ICON_CV.upload}CV importieren</button>
      <button class="btn btn-primary" id="cv-download">${ICON_CV.download}PDF herunterladen</button>`);
   if (!(await ladeCv())) return;
   $("#cv-import").onclick = importDialog;
@@ -580,45 +580,53 @@ function cvDokument(zoom = 1) {
   const kontakt = [k.email, k.telefon, adresse, k.linkedin.replace(/^https?:\/\/(www\.)?/, ""), k.xing.replace(/^https?:\/\/(www\.)?/, ""),
     k.website.replace(/^https?:\/\/(www\.)?/, "")].filter(Boolean).map(esc).join(" &nbsp;|&nbsp; ");
   const liste = (punkte) => punkte.length ? `<ul>${punkte.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
-  const eintrag = (titel, unter, zeit, punkte) => `<div class="eintrag">
-      <div class="zeile"><span class="titel">${esc(titel)}</span><span class="zeit">${esc(heute(zeit))}</span></div>
-      ${unter ? `<div class="unter">${esc(unter)}</div>` : ""}${liste(punkte)}</div>`;
+  // Zweispaltig: links ca. 30 % (Zeitraum bzw. Rubrik), rechts ca. 70 % (Inhalt)
+  const zeile = (links, rechts) => `<div class="eintrag"><div class="sp-l">${links}</div><div class="sp-r">${rechts}</div></div>`;
+  const eintrag = (titel, unter, zeit, punkte) => zeile(esc(heute(zeit)),
+    `<div class="titel">${esc(titel)}</div>${unter ? `<div class="unter">${esc(unter)}</div>` : ""}${liste(punkte)}`);
+  // Antichronologisch: das Aktuellste steht oben
+  const monate = (t, offen) => {
+    const m = String(t || "").match(/^(?:(\d{1,2})[./])?(\d{4})$/);
+    if (/^(heute|present|aktuell)$/i.test(String(t || "").trim())) return 99999;
+    return m ? Number(m[2]) * 12 + (m[1] ? Number(m[1]) : offen) : -1;
+  };
+  const neuZuerst = (liste_) => [...liste_].sort((x, y) =>
+    (monate(y.ende || "heute", 12) - monate(x.ende || "heute", 12)) || (monate(y.start, 1) - monate(x.start, 1)));
   const teile = {
     zusammenfassung: () => c.zusammenfassung && `<p class="text">${esc(c.zusammenfassung).replace(/\n/g, "<br>")}</p>`,
-    erfahrung: () => c.erfahrung.map((e) => eintrag(e.rolle, [e.firma, e.ort].filter(Boolean).join(", "), zeitraum(e.start, e.ende), e.punkte)).join(""),
-    bildung: () => c.bildung.map((e) => eintrag(e.abschluss, [e.institution, e.ort].filter(Boolean).join(", "), zeitraum(e.start, e.ende), e.punkte)).join(""),
-    skills: () => c.skills.map((g) => `<p class="skill">${g.gruppe ? `<b>${esc(g.gruppe)}:</b> ` : ""}${g.eintraege.map(esc).join(" · ")}</p>`).join(""),
-    sprachen: () => p.sprachen.length && `<p class="skill">${p.sprachen.map((s) => `${esc(s.sprache)}${s.niveau ? ` (${esc(s.niveau)})` : ""}`).join(" · ")}</p>`,
-    zertifikate: () => liste(c.zertifikate.map((z) => [z.name, [z.aussteller, z.datum].filter(Boolean).join(", ")].filter(Boolean).join(" – "))),
-    projekte: () => c.projekte.map((x) => `<p class="skill"><b>${esc(x.name)}</b>${x.beschreibung ? ` – ${esc(x.beschreibung)}` : ""}</p>`).join(""),
+    erfahrung: () => neuZuerst(c.erfahrung).map((e) => eintrag(e.rolle, [e.firma, e.ort].filter(Boolean).join(", "), zeitraum(e.start, e.ende), e.punkte)).join(""),
+    bildung: () => neuZuerst(c.bildung).map((e) => eintrag(e.abschluss, [e.institution, e.ort].filter(Boolean).join(", "), zeitraum(e.start, e.ende), e.punkte)).join(""),
+    skills: () => c.skills.map((g) => zeile(g.gruppe ? `<b>${esc(g.gruppe)}</b>` : "", g.eintraege.map(esc).join(" · "))).join(""),
+    sprachen: () => p.sprachen.map((x) => zeile(`<b>${esc(x.sprache)}</b>`, esc(x.niveau || ""))).join(""),
+    zertifikate: () => c.zertifikate.map((z) => zeile(esc(z.datum || ""), `<b>${esc(z.name)}</b>${z.aussteller ? `, ${esc(z.aussteller)}` : ""}`)).join(""),
+    projekte: () => c.projekte.map((x) => zeile(`<b>${esc(x.name)}</b>`, esc(x.beschreibung || ""))).join(""),
   };
   const abschnitte = d.reihenfolge.map((a) => {
-    if (a === "eigene") return c.eigene.map((e) => `<section><h2>${esc(e.titel)}</h2>${liste(e.punkte)}</section>`).join("");
+    if (a === "eigene") return c.eigene.map((e) => `<section><h2>${esc(e.titel)}</h2>${zeile("", liste(e.punkte))}</section>`).join("");
     const inhalt = teile[a]?.();
     return inhalt ? `<section><h2>${esc(abschnittTitel(a))}</h2>${inhalt}</section>` : "";
   }).join("");
   const schrift = d.schrift === "serif" ? 'Georgia, "Times New Roman", serif' : 'Helvetica, Arial, "Liberation Sans", sans-serif';
   return `<!doctype html><html lang="${d.titel_de ? "de" : "en"}"><head><meta charset="utf-8"><title>Lebenslauf ${esc(name)}</title>
 <style>
-@page { size: A4; margin: 15mm 17mm 14mm; }
+@page { size: A4; margin: 25mm 20mm 25mm 25mm; }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #fff; }
-body { font-family: ${schrift}; color: #1d2130; font-size: 10pt; line-height: 1.42; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: ${schrift}; color: #111; font-size: 10.5pt; line-height: 1.2; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .seite { zoom: ${zoom}; }
 h2 { break-after: avoid; }
-li { break-inside: avoid; }
 h1 { font-size: 21pt; margin: 0; color: ${d.akzent}; letter-spacing: -.01em; line-height: 1.15; }
-.headline { font-size: 11.5pt; color: #4a4f63; margin-top: 3px; }
-.kontakt { font-size: 8.8pt; color: #4a4f63; margin-top: 5px; }
-h2 { font-size: 9.5pt; text-transform: uppercase; letter-spacing: .09em; color: ${d.akzent}; margin: 15px 0 7px; padding-bottom: 3px; border-bottom: 1px solid ${d.akzent}55; }
+.headline { font-size: 11.5pt; color: #333; margin-top: 3px; }
+.kontakt { font-size: 9pt; color: #333; margin-top: 5px; }
+h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .09em; color: ${d.akzent}; margin: 20px 0 9px; padding-bottom: 3px; border-bottom: 1px solid ${d.akzent}55; }
 section { break-inside: auto; }
-.eintrag { margin-bottom: 8px; break-inside: avoid; }
-.zeile { display: flex; justify-content: space-between; gap: 12px; }
+.eintrag { display: grid; grid-template-columns: 30% 70%; margin-bottom: 9px; break-inside: avoid; }
+.sp-l { padding-right: 4mm; color: #333; }
+.sp-r { min-width: 0; }
 .titel { font-weight: 700; }
-.zeit { color: #4a4f63; white-space: nowrap; font-size: 9.3pt; }
-.unter { color: #4a4f63; font-size: 9.3pt; }
-ul { margin: 3px 0 0; padding-left: 15px; }
-li { margin: 1px 0; }
+.unter { color: #333; }
+ul { margin: 3px 0 0; padding-left: 4mm; }
+li { margin: 1px 0; break-inside: avoid; }
 p { margin: 0 0 4px; }
 .text { text-align: left; }
 </style></head><body><div class="seite">
@@ -661,9 +669,10 @@ async function zeichneVorschau() {
   frame.src = `${CV.pdfUrl}#toolbar=0&navpanes=0&view=FitH`;
   skaliereVorschau();
   if (info) {
-    info.textContent = `${r.seiten} Seite${r.seiten > 1 ? "n" : ""} · A4 · mit Seitenrändern`
+    info.textContent = `${r.seiten} Seite${r.seiten > 1 ? "n" : ""} · A4 · oberer Rand 2,0–2,5 cm`
       + (r.zoom < 1 ? ` · auf ${Math.round(r.zoom * 100)} % verkleinert` : "")
-      + (CV.cv.design.eine_seite && r.seiten > 1 ? " – zu viel Inhalt für eine Seite, bitte kürzen" : "");
+      + (CV.cv.design.eine_seite && r.seiten > 1 ? " – zu viel Inhalt für eine Seite, bitte kürzen" : "")
+      + (r.seiten > 2 ? " – ein Lebenslauf sollte höchstens 2 Seiten haben" : "");
   }
   if (CV_SCHRITTE[CV.schritt][0] === "check" && $("#ats-box")) $("#ats-box").innerHTML = atsHtml(atsCheck());
 }
@@ -672,7 +681,7 @@ async function zeichneVorschau() {
 function zeichneHtmlVorschau(frame) {
   frame.onload = () => {
     const doc = frame.contentDocument;
-    const hoehe = doc.querySelector(".seite").scrollHeight + 2 * 57;
+    const hoehe = doc.querySelector(".seite").scrollHeight + 170;
     CV.seiten = Math.max(1, Math.ceil(hoehe / A4_PX.h - .02));
     frame.style.height = `${Math.max(A4_PX.h, CV.seiten * A4_PX.h)}px`;
     skaliereVorschau();
@@ -681,7 +690,7 @@ function zeichneHtmlVorschau(frame) {
     if (CV_SCHRITTE[CV.schritt][0] === "check" && $("#ats-box")) $("#ats-box").innerHTML = atsHtml(atsCheck());
   };
   frame.removeAttribute("src");
-  frame.srcdoc = cvDokument(1).replace("</style>", "body { padding: 15mm 17mm 14mm; }</style>");
+  frame.srcdoc = cvDokument(1).replace("</style>", "body { padding: 25mm 20mm 25mm 25mm; }</style>");
 }
 
 function skaliereVorschau() {
@@ -723,7 +732,7 @@ function druckeCv() {
    ================================================================ */
 function importDialog() {
   dialog(`<div class="dialog-body">
-    <h2>Lebenslauf aus PDF übernehmen</h2>
+    <h2>Lebenslauf importieren</h2>
     <p class="muted">Wähle ein oder mehrere Dateien (PDF, Word, Markdown, Bild) (z. B. deinen aktuellen CV und den LinkedIn-Profil-Export). Der Text wird lokal ausgelesen und von Claude strukturiert – kaputte Zeichen werden repariert. Erfunden wird nichts.</p>
     ${!CV.claude ? `<div class="hinweis">${ICON.bell}<div>Claude Code wurde nicht gefunden – der Import braucht <code>claude</code>.</div></div>` : ""}
     <label class="dropzone" id="imp-drop">${ICON_CV.upload}<span><b>PDF, Word, Markdown oder Bild hierher ziehen</b> oder klicken zum Auswählen</span>
@@ -1171,12 +1180,12 @@ function mappeQuellen() {
   const nwDateien = new Set(UNT.nachweise.map((x) => x.datei).filter(Boolean));
   const name = (d) => d.name.replace(/\.[^.]+$/, "").replace(/_/g, " ");
   return {
-    anschreiben: q.filter((d) => /^bewerbungen\/Anschreiben_/i.test(d.pfad)).map((d) => ({ art: "datei", pfad: d.pfad, titel: "Anschreiben", label: d.name, gruppe: "anschreiben" })),
+    anschreiben: q.filter((d) => /^bewerbungen\/(Anschreiben_|.*_Anschreiben)/i.test(d.pfad)).map((d) => ({ art: "datei", pfad: d.pfad, titel: "Anschreiben", label: d.name, gruppe: "anschreiben" })),
     lebenslauf: [{ art: "cv", titel: "Lebenslauf", label: "Aktueller Lebenslauf aus dem Editor (empfohlen)", gruppe: "cv" },
       ...q.filter((d) => /Lebenslauf|^CV_/i.test(d.name) && !d.pfad.startsWith("unterlagen/")).map((d) => ({ art: "datei", pfad: d.pfad, titel: "Lebenslauf", label: d.pfad, gruppe: "lebenslauf" }))],
     zeugnis: UNT.nachweise.filter((x) => x.datei && x.typ !== "Bewerbungsfoto").map((x) => ({ art: "datei", pfad: x.datei, titel: x.titel || x.typ, label: [x.typ, x.titel].filter(Boolean).join(" · "), gruppe: "zeugnis" })),
     zertifikat: CV.cv.zertifikate.filter((z) => z.datei).map((z) => ({ art: "datei", pfad: z.datei, titel: `Zertifikat: ${z.name}`, label: [z.name, z.aussteller].filter(Boolean).join(" – "), gruppe: "zertifikat" })),
-    sonstiges: q.filter((d) => !/^bewerbungen\/Anschreiben_/i.test(d.pfad) && !/Lebenslauf|^CV_/i.test(d.name) && !zertDateien.has(d.pfad) && !nwDateien.has(d.pfad) && !/\.vorschau/.test(d.pfad))
+    sonstiges: q.filter((d) => !/^bewerbungen\/(Anschreiben_|.*_Anschreiben)/i.test(d.pfad) && !/Lebenslauf|^CV_/i.test(d.name) && !zertDateien.has(d.pfad) && !nwDateien.has(d.pfad) && !/\.vorschau/.test(d.pfad))
       .map((d) => ({ art: "datei", pfad: d.pfad, titel: name(d), label: d.pfad, gruppe: "sonstiges" })),
   };
 }

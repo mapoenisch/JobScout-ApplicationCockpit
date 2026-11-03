@@ -31,6 +31,9 @@ nachweise.json
 
 # Aus dem Cockpit erzeugte PDFs (enthalten persönliche Daten)
 bewerbungen/Lebenslauf_*.pdf
+bewerbungen/*_Lebenslauf*.pdf
+bewerbungen/*_Anschreiben*.pdf
+bewerbungen/Anschreiben_*.pdf
 bewerbungen/Bewerbungsmappe_*.pdf
 
 # Stellenanalysen, Lebenslauf-Bibliothek, hochgeladene Anzeigen

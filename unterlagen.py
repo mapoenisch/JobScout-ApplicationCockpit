@@ -196,7 +196,10 @@ def baue_mappe(daten: dict) -> dict:
                 html = daten.get("cv_html") or ""
                 if "<html" not in html[:300].lower():
                     raise ValueError("Lebenslauf aus dem Editor fehlt")
-                _html_zu_pdf(html, ziel)
+                chrome = cv._chrome()
+                if not chrome:
+                    raise RuntimeError("Für die Mappe wird Google Chrome gebraucht")
+                cv._drucke_cv(chrome, html, ziel, cv._zoom_aus(html) < 1)
                 titel = titel or "Lebenslauf"
             else:
                 rel = unicodedata.normalize("NFC", str(t.get("pfad") or ""))

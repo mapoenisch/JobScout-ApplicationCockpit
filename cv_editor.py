@@ -585,7 +585,7 @@ def exportiere_pdf(daten: dict) -> dict:
         raise RuntimeError("Kein Chrome gefunden – nutze „Drucken → Als PDF sichern“")
     BEWERBUNGEN_DIR.mkdir(exist_ok=True)
     zusatz = _dateiname(daten.get("zusatz") or "")
-    name = f"Lebenslauf_{_dateiname(daten.get('name') or '')}"
+    name = f"{_dateiname(daten.get('name') or '')}_Lebenslauf"   # Vorname_Nachname_Lebenslauf
     if zusatz:
         name += f"_{zusatz}"
     ziel = BEWERBUNGEN_DIR / f"{name}.pdf"
@@ -597,16 +597,33 @@ def exportiere_pdf(daten: dict) -> dict:
 ZOOM_STUFEN = (1.0, 0.92, 0.85, 0.78, 0.72)
 
 
-def _drucke_cv(chrome: str, html: str, ziel: Path, eine_seite: bool) -> tuple[int, float]:
-    """Druckt das CV; bei „Auf eine Seite“ wird stufenweise verkleinert,
-    bis es passt. Gibt (Seitenzahl, Zoom) zurück."""
-    stufen = ZOOM_STUFEN if eine_seite else (1.0,)
-    for zoom in stufen:
-        html = re.sub(r"zoom: [0-9.]+;", f"zoom: {zoom};", html, count=1)
-        _drucke(chrome, html, ziel)
-        seiten = _seiten(ziel)
-        if seiten <= 1:
-            break
+_RAND_OBEN = re.compile(r"(@page \{ size: A4; margin: )\d+(?:\.\d+)?mm")
+
+
+def _drucke_cv(chrome: str, html: str, ziel: Path, eine_seite: bool,
+               zoom_erlaubt: bool = True) -> tuple[int, float]:
+    """Druckt Lebenslauf/Brief. Der obere Rand liegt zwischen 25 und 20 mm: erst
+    mit 25 mm, nur wenn dadurch eine Seite mehr nötig wird, mit 20 mm. Bei
+    „Auf eine Seite“ wird danach stufenweise verkleinert. Gibt (Seiten, Zoom)."""
+    def druck(oben: int, zoom: float) -> int:
+        h = _RAND_OBEN.sub(rf"\g<1>{oben}mm", html, count=1)
+        h = re.sub(r"zoom: [0-9.]+;", f"zoom: {zoom};", h, count=1)
+        _drucke(chrome, h, ziel)
+        return _seiten(ziel)
+
+    oben, zoom = 25, 1.0
+    seiten = druck(25, 1.0)
+    if seiten > 1:
+        knapp = druck(20, 1.0)
+        if knapp < seiten or (eine_seite and zoom_erlaubt):
+            oben, seiten = 20, knapp
+        else:
+            druck(25, 1.0)   # 20 mm bringt nichts: Datei wieder mit 25 mm
+    if eine_seite and zoom_erlaubt:
+        for stufe in ZOOM_STUFEN[1:]:
+            if seiten <= 1:
+                break
+            zoom, seiten = stufe, druck(oben, stufe)
     return seiten, zoom
 
 
@@ -620,7 +637,8 @@ def vorschau_pdf(daten: dict) -> dict:
         raise RuntimeError("Kein Chrome gefunden")
     with tempfile.TemporaryDirectory() as tmp:
         ziel = Path(tmp) / "vorschau.pdf"
-        seiten, zoom = _drucke_cv(chrome, html, ziel, bool(daten.get("eine_seite")))
+        seiten, zoom = _drucke_cv(chrome, html, ziel, bool(daten.get("eine_seite")),
+                                  daten.get("zoom", True))
         return {"ok": True, "pdf": base64.b64encode(ziel.read_bytes()).decode(),
                 "seiten": seiten, "zoom": zoom}
 

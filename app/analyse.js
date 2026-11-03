@@ -702,7 +702,7 @@ function pAnschreiben(f) {
   if (!f.cv) return `<div class="leer">Bitte zuerst den Lebenslauf festlegen.</div>`;
   const a = f.anschreiben;
   if (!a) {
-    return `<p>Claude schreibt ein Anschreiben (Geschäftsbriefnorm, Sie-Form, max. eine Seite) auf Basis der Stellenanalyse und deines angepassten Lebenslaufs. Anschließend kannst du den gesamten Text frei ändern.</p>
+    return `<p>Claude schreibt ein Anschreiben (DIN 5008, Sie-Form, genau eine Seite) auf Basis der Stellenanalyse und deines angepassten Lebenslaufs. Anschließend kannst du den gesamten Text frei ändern.</p>
       <div class="an-fuss"><button class="btn btn-primary" id="an-erzeugen">${ICON.spark}Anschreiben automatisch erstellen</button></div>`;
   }
   const woerter = a.text.trim().split(/\s+/).length;
@@ -711,7 +711,7 @@ function pAnschreiben(f) {
       <span class="chip" id="an-woerter">${woerter} Wörter</span></div>
     <label class="feld">Gesamter Text des Anschreibens
       <textarea id="an-brief" rows="20" class="an-brief">${esc(a.text)}</textarea></label>
-    <p class="muted small" style="margin:6px 0 0">Absender, Empfänger und Datum setzt das Cockpit beim PDF-Export. Die erste Zeile mit „Betreff:“ wird fett gesetzt. Absätze trennst du mit einer Leerzeile.</p>
+    <p class="muted small" style="margin:6px 0 0">Absender, Empfänger und Datum setzt das Cockpit nach DIN 5008 (Ränder 25/20/25 mm, oben 2,0–2,5 cm, Arial 11 pt). Die erste Zeile mit „Betreff:“ wird fett gesetzt. Absätze trennst du mit einer Leerzeile.</p>
     <div class="an-fuss"><button class="btn" id="an-neu-erzeugen">${ICON.refresh}Neu erstellen</button>
       <button class="btn btn-primary" id="an-weiter">Weiter: Abschluss</button></div>`;
 }
@@ -740,7 +740,8 @@ function vAnschreiben(el, f) {
     $("#an-woerter", el).textContent = `${e.target.value.trim().split(/\s+/).filter(Boolean).length} Wörter`;
     clearTimeout(AN.saveTimer);
     AN.saveTimer = setTimeout(briefSpeichern, 900);
-    zeichneRechts();
+    clearTimeout(AN.rechtsTimer);
+    AN.rechtsTimer = setTimeout(zeichneRechts, 900);
   });
   $("#an-weiter", el)?.addEventListener("click", async () => { if (await briefSpeichern()) gehZu(5); });
 }
@@ -836,40 +837,49 @@ function cvHtmlFuer(c, zoom = 1) {
   try { return cvDokument(zoom); } finally { CV.cv = alt; }
 }
 
-function cvIframe(rahmen, c, passeAn = true) {
-  rahmen.innerHTML = "";
+/* Vorschau = das echte PDF (Seitenränder und Umbrüche wie im Export). */
+async function pdfRahmen(rahmen, holen) {
+  const nr = (AN.vorschauNr = (AN.vorschauNr || 0) + 1);
+  rahmen.innerHTML = `<div class="muted small" style="padding:24px">Vorschau wird erstellt …</div>`;
+  let r;
+  try { r = await holen(); } catch (e) {
+    if (nr === AN.vorschauNr && rahmen.isConnected) rahmen.innerHTML = `<div class="hinweis">${ICON.bell}<div>${esc(e.message)}</div></div>`;
+    return null;
+  }
+  if (nr !== AN.vorschauNr || !rahmen.isConnected) return null;   // neuere Anfrage läuft
+  const bytes = Uint8Array.from(atob(r.pdf), (c) => c.charCodeAt(0));
+  if (AN.pdfUrl) URL.revokeObjectURL(AN.pdfUrl);
+  AN.pdfUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
   const frame = document.createElement("iframe");
   frame.className = "an-iframe";
-  frame.setAttribute("sandbox", "allow-same-origin");
-  frame.onload = () => {
-    const doc = frame.contentDocument;
-    const hoehe = doc.querySelector(".seite").scrollHeight;
-    let zoom = 1;
-    if (passeAn && c.design.eine_seite && hoehe > A4_PX.h) zoom = Math.max(.72, A4_PX.h / hoehe - .005);
-    if (zoom < 1) doc.querySelector(".seite").style.zoom = zoom;
-    if (passeAn) AN.cvZoom = zoom;
-    const h = Math.max(A4_PX.h, Math.ceil(hoehe * zoom / A4_PX.h - .02) * A4_PX.h);
-    frame.style.height = `${h}px`;
-    const s = Math.min(1, rahmen.clientWidth / A4_PX.b);
-    frame.style.transform = `scale(${s})`;
-    rahmen.style.height = `${h * s}px`;
-    const info = $("#an-seiten");
-    if (info && passeAn) info.textContent = `${Math.max(1, Math.ceil(hoehe * zoom / A4_PX.h - .02))} Seite(n) · A4${zoom < 1 ? ` · auf ${Math.round(zoom * 100)} % verkleinert` : ""}`;
-  };
-  frame.srcdoc = cvHtmlFuer(c, 1);
+  frame.title = "PDF-Vorschau";
+  frame.src = `${AN.pdfUrl}#toolbar=0&navpanes=0&view=FitH`;
+  const h = Math.max(1, r.seiten) * A4_PX.h;
+  frame.style.height = `${h}px`;
+  const sk = Math.min(1, rahmen.clientWidth / A4_PX.b);
+  frame.style.transform = `scale(${sk})`;
+  rahmen.style.height = `${h * sk}px`;
+  rahmen.innerHTML = "";
   rahmen.append(frame);
+  return r;
 }
 
-function briefPapier(f) {
-  const p = CV.profil, k = p.kontakt;
-  const name = [p.persoenlich.vorname, p.persoenlich.nachname].filter(Boolean).join(" ");
-  const absender = [name, k.strasse, [k.plz, k.ort].filter(Boolean).join(" "), k.telefon, k.email].filter(Boolean);
-  const abs = (f.anschreiben?.text || "").split(/\n\s*\n/).map((a) => a.trim()).filter(Boolean);
-  return `<div class="an-brief-papier">
-    <div class="an-bp-abs">${absender.map(esc).join("<br>")}</div>
-    <div class="an-bp-empf">${esc(f.firma)}</div>
-    <div class="an-bp-datum">${esc(k.ort ? k.ort + ", " : "")}${new Date().toLocaleDateString("de-DE")}</div>
-    ${abs.map((a, i) => i === 0 && /^betreff:/i.test(a) ? `<p><b>${esc(a.slice(8).trim())}</b></p>` : `<p>${esc(a).replace(/\n/g, "<br>")}</p>`).join("")}</div>`;
+async function cvIframe(rahmen, c, passeAn = true) {
+  const r = await pdfRahmen(rahmen, () => api("/api/cv/vorschau", { html: cvHtmlFuer(c, 1), eine_seite: !!c.design.eine_seite }));
+  if (!r) return;
+  if (passeAn) AN.cvZoom = r.zoom;
+  const info = $("#an-seiten");
+  if (info && passeAn) {
+    info.textContent = `${r.seiten} Seite${r.seiten > 1 ? "n" : ""} · A4`
+      + (r.zoom < 1 ? ` · auf ${Math.round(r.zoom * 100)} % verkleinert` : "")
+      + (r.seiten > 2 ? " – ein Lebenslauf sollte höchstens 2 Seiten haben" : "");
+  }
+}
+
+async function briefIframe(rahmen, f) {
+  const r = await pdfRahmen(rahmen, () => api("/api/analyse/fall/anschreiben_vorschau", { id: f.id, text: f.anschreiben?.text || "" }));
+  const info = $("#an-seiten");
+  if (r && info) info.textContent = r.seiten === 1 ? "1 Seite · A4 · DIN 5008" : `${r.seiten} Seiten – ein Anschreiben sollte genau eine Seite haben, bitte kürzen`;
 }
 
 async function zeichneRechts() {
@@ -890,7 +900,7 @@ async function zeichneRechts() {
   el.innerHTML = `
     <div class="card an-r-kopf"><div class="an-r-titel"><span>${titel[0]}</span><b>${esc(titel[1])}</b></div>
       ${s >= 3 && f.cv && f.anschreiben ? `<div class="segment"><button data-rt="cv" class="${art === "cv" ? "an" : ""}">Lebenslauf</button><button data-rt="brief" class="${art === "brief" ? "an" : ""}">Anschreiben</button></div>` : ""}</div>
-    ${art === "anzeige" ? "" : `<div class="card an-r-leiste"><span class="muted small" id="an-seiten">${art === "brief" ? "1 Seite · A4" : ""}</span></div>`}
+    ${art === "anzeige" ? "" : `<div class="card an-r-leiste"><span class="muted small" id="an-seiten"></span></div>`}
     <div class="an-r-papier" id="an-papier"></div>`;
   $$("[data-rt]", el).forEach((b) => b.addEventListener("click", () => { AN.vorschauTab = b.dataset.rt; zeichneRechts(); }));
   const papier = $("#an-papier", el);
@@ -905,7 +915,10 @@ async function zeichneRechts() {
     papier.append(rahmen);
     cvIframe(rahmen, c, s !== 2);
   } else {
-    papier.innerHTML = briefPapier(f);
+    const rahmen = document.createElement("div");
+    rahmen.className = "an-papier-rahmen";
+    papier.append(rahmen);
+    briefIframe(rahmen, f);
   }
 }
 

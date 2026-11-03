@@ -825,8 +825,9 @@ ANSCHREIBEN_PROMPT = """Schreibe ein Bewerbungsanschreiben auf Deutsch.
 {DATEN_HINWEIS}
 
 Regeln:
-- Deutsche Geschäftsbriefnorm, formelle Sie-Anrede, maximal eine Seite
-  (ca. 220–300 Wörter, 3–4 Absätze).
+- Deutsche Geschäftsbriefnorm (DIN 5008), formelle Sie-Anrede, exakt eine
+  DIN-A4-Seite bei 11 pt Arial (ca. 220–280 Wörter im Fließtext, 3–4 Absätze,
+  keine Aufzählungen). Der Betreff ist eine Zeile, ohne Punkt am Ende.
 - Beziehe dich auf konkrete Anforderungen/Aufgaben der Stelle und belege sie
   mit Fakten aus dem Lebenslauf. NICHTS erfinden (keine Erfahrungen, Zahlen,
   Tools). Lücken nicht erwähnen und nicht überspielen.
@@ -900,42 +901,64 @@ def anschreiben_speichern(daten: dict) -> dict:
     return {"ok": True, "fall": fall}
 
 
+def _brief_teile(text: str) -> dict:
+    """Zerlegt den Anschreiben-Text in Betreff, Anrede, Absätze und Gruß/Name."""
+    teile = [a.strip() for a in re.split(r"\n\s*\n", text.strip()) if a.strip()]
+    betreff = anrede = gruss = name = ""
+    if teile and teile[0].lower().startswith("betreff:"):
+        betreff = teile.pop(0)[8:].strip()
+    if teile and "\n" not in teile[0] and len(teile[0]) < 90 and teile[0].endswith((",", ":")):
+        anrede = teile.pop(0)
+    if len(teile) > 1 and len(teile[-1].splitlines()) <= 3 and len(teile[-1]) < 120:
+        zeilen = teile.pop().splitlines()
+        gruss, name = zeilen[0], " ".join(zeilen[1:])
+    return {"betreff": betreff, "anrede": anrede, "absaetze": teile,
+            "gruss": gruss, "name": name}
+
+
 def anschreiben_html(text: str, firma: str) -> str:
+    """Geschäftsbrief nach DIN 5008: Ränder links 25 / rechts 20 / unten 25 mm,
+    Oberer Rand 25 mm (Anschrift links, Absender rechts auf gleicher Höhe), Arial/Helvetica 11 pt, Zeilenabstand 1,15,
+    linksbündig; je 2 Leerzeilen vor Datum, Betreff und Anrede, 1 Leerzeile
+    nach Anrede, zwischen Absätzen und vor der Unterschrift."""
     p = cv.lade_profil()
-    k, pe = p["kontakt"], p["persoenlich"]
+    k = p["kontakt"]
+    e = html_mod.escape
     name = _name()
     adresse = [name, k["strasse"], " ".join(x for x in (k["plz"], k["ort"]) if x),
                k["telefon"], k["email"]]
-    absender = "<br>".join(html_mod.escape(a) for a in adresse if a)
-    e = html_mod.escape
-    absaetze = [a.strip() for a in re.split(r"\n\s*\n", text.strip()) if a.strip()]
-    koerper = []
-    for i, a in enumerate(absaetze):
-        zeilen = e(a).replace("\n", "<br>")
-        if i == 0 and a.lower().startswith("betreff:"):
-            koerper.append(f'<p class="betreff">{zeilen[8:].strip()}</p>')
-        else:
-            koerper.append(f"<p>{zeilen}</p>")
+    absender = "<br>".join(e(a) for a in adresse if a)
+    t = _brief_teile(text)
+    absaetze = "".join(f"<p>{e(a).replace(chr(10), '<br>')}</p>" for a in t["absaetze"])
     heute = date.today().strftime("%d.%m.%Y")
     ort = k["ort"]
+    betreff = (f'<div class="betreff">{e(t["betreff"])}</div>' if t["betreff"]
+               else '<div style="height:2.3em"></div>')
+    anrede = f'<p>{e(t["anrede"])}</p>' if t["anrede"] else ""
+    gruss = f'<p>{e(t["gruss"])}</p>' if t["gruss"] else ""
+    unterschrift = f'<p>{e(t["name"])}</p>' if t["name"] else ""
     return f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
 <title>Anschreiben {e(name)}</title><style>
-@page {{ size: A4; margin: 0; }}
+@page {{ size: A4; margin: 25mm 20mm 25mm 25mm; }}
 html, body {{ margin: 0; background: #fff; }}
 body {{ font-family: Helvetica, Arial, "Liberation Sans", sans-serif;
-  color: #111; font-size: 10.5pt; line-height: 1.45; }}
-.seite {{ width: 210mm; padding: 20mm 22mm 18mm 25mm; box-sizing: border-box; }}
-.absender {{ font-size: 9.5pt; color: #333; text-align: right; }}
-.empfaenger {{ margin-top: 14mm; min-height: 24mm; }}
-.datum {{ text-align: right; margin-top: 4mm; }}
-.betreff {{ font-weight: 700; margin-top: 10mm; }}
-p {{ margin: 0 0 3.2mm; }}
-</style></head><body><div class="seite">
-<div class="absender">{absender}</div>
+  color: #111; font-size: 11pt; line-height: 1.15; text-align: left; }}
+.kopf {{ float: right; width: 45%; text-align: right; font-size: 9.5pt; color: #333; }}
+.empfaenger {{ width: 50%; min-height: 4.6em; }}
+.datum {{ clear: both; }}
+.datum {{ margin-top: 2.3em; text-align: right; }}
+.betreff {{ margin: 2.3em 0; font-weight: 700; }}
+p {{ margin: 0 0 1.15em; }}
+</style></head><body>
+<div class="kopf">{absender}</div>
 <div class="empfaenger">{e(firma)}</div>
 <div class="datum">{e(ort + ", " if ort else "")}{heute}</div>
-{''.join(koerper)}
-</div></body></html>"""
+{betreff}{anrede}{absaetze}{gruss}{unterschrift}
+</body></html>"""
+
+
+def _datei_praefix() -> str:
+    return cv._dateiname(_name()) or "Bewerbung"
 
 
 def anschreiben_pdf(daten: dict) -> dict:
@@ -944,7 +967,17 @@ def anschreiben_pdf(daten: dict) -> dict:
         raise ValueError("Es gibt noch kein Anschreiben")
     return _pdf_speichern(
         anschreiben_html(fall["anschreiben"]["text"], fall["firma"]),
-        f"Anschreiben_{cv._dateiname(fall['firma'] or fall['titel'])}")
+        f"{_datei_praefix()}_Anschreiben_{cv._dateiname(fall['firma'] or fall['titel'])}")
+
+
+def anschreiben_vorschau(daten: dict) -> dict:
+    """Echte PDF-Vorschau des Briefs (DIN 5008), nichts wird gespeichert."""
+    fall = _hole_fall(daten.get("id"))
+    text = str(daten.get("text") or (fall.get("anschreiben") or {}).get("text") or "")
+    if not text.strip():
+        raise ValueError("Es gibt noch kein Anschreiben")
+    return cv.vorschau_pdf({"html": anschreiben_html(text, fall["firma"]),
+                            "eine_seite": True, "zoom": False})
 
 
 def _pdf_speichern(html: str, name: str) -> dict:
@@ -953,9 +986,8 @@ def _pdf_speichern(html: str, name: str) -> dict:
         raise RuntimeError("Kein Chrome gefunden – PDF-Export nicht möglich")
     cv.BEWERBUNGEN_DIR.mkdir(exist_ok=True)
     ziel = cv.BEWERBUNGEN_DIR / f"{name}.pdf"
-    cv._drucke(chrome, html, ziel)
-    return {"ok": True, "pfad": str(ziel.relative_to(cv.BASIS)),
-            "seiten": cv._seiten(ziel)}
+    seiten, _ = cv._drucke_cv(chrome, html, ziel, True, zoom_erlaubt=False)
+    return {"ok": True, "pfad": str(ziel.relative_to(cv.BASIS)), "seiten": seiten}
 
 
 # ============================================================
@@ -1043,6 +1075,7 @@ AKTIONEN = {
     "fall/anschreiben": anschreiben_erzeugen,
     "fall/anschreiben_speichern": anschreiben_speichern,
     "fall/anschreiben_pdf": anschreiben_pdf,
+    "fall/anschreiben_vorschau": anschreiben_vorschau,
     "fall/abschluss": abschluss_speichern,
     "fall/stammdaten": als_stammdaten,
 }
