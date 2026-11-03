@@ -32,19 +32,21 @@ Stellenanzeigen statt Leads.
 ```bash
 pip3 install requests            # einzige Python-Abhängigkeit (nur für den Scraper)
 brew install poppler             # pdftotext, pdftoppm, pdfunite für PDF-Import/-Mappe
-python3 jobscout_app.py          # Cockpit starten → http://127.0.0.1:8765
+python3 jobscout_app.py          # Cockpit starten → http://127.0.0.1:8765 (Desktop-App: Port 8766)
 ```
 
 Alternativ per Doppelklick auf `run_cockpit.command` oder über die Desktop-App
-(`start_cockpit.sh` startet den Server bei Bedarf und öffnet den Browser).
+(`start_cockpit.sh` startet den Server bei Bedarf auf Port 8766 und öffnet den
+Browser; anderer Port per `JOBSCOUT_PORT`). Das App-Icon liegt in `assets/`.
 
 **Optional:**
 
 | Werkzeug | Wofür |
 |---|---|
 | [Claude Code](https://claude.com/claude-code) (`claude`) | PDF-Import, Zertifikate/Zeugnisse auslesen, Bewerbungs- und Interview-Workflows |
-| Google Chrome | PDF-Export des Lebenslaufs und der Bewerbungsmappe (headless) |
-| Microsoft Word | originalgetreue Umwandlung von DOCX-Anschreiben in der Mappe (sonst `textutil`) |
+| Google Chrome | PDF-Export (Lebenslauf, Anschreiben, Mappe) und Umwandlung von Markdown/Bildern in PDF (headless) |
+| Swift (Xcode Command Line Tools) | Texterkennung (OCR) für Bilder und Scans per macOS Vision |
+| Microsoft Word | originalgetreue Umwandlung von Word-Dateien in PDF (sonst `textutil` + Chrome) |
 | Adzuna-API-Keys in `.env` (`ADZUNA_APP_ID`, `ADZUNA_APP_KEY`) | vierte Jobquelle – ohne Keys wird sie übersprungen |
 
 ---
@@ -67,6 +69,12 @@ Alternativ per Doppelklick auf `run_cockpit.command` oder über die Desktop-App
 - Kanban-Pipeline mit Drag & Drop und Follow-up-Erinnerungen
 - Interview-Prep: Firmenrecherche, 10 wahrscheinliche Fragen mit
   Antwortgerüst, Rückfragen, Checkliste
+
+**Analysieren & gezielt bewerben**
+- Analyse-Ebene: Stelle (automatisch gefunden, als Datei hochgeladen oder als
+  Text eingefügt) → KI-Analyse → Vergleich mit bis zu 3 Lebensläufen →
+  Lebenslauf-Vorschläge → Anschreiben → Bewerbungsmappe
+- Bibliothek mit bis zu 10 Lebensläufen
 
 **Profil & Unterlagen**
 - Profilseite als zentrale Quelle für alle persönlichen Daten
@@ -110,7 +118,7 @@ nur mit dem Header `X-JobScout: 1` an (Schutz gegen fremde Webseiten).
   übergeben
 
 ### Analyse
-Die Analyse-Ebene führt eine einzelne Stelle in sechs Schritten zur fertigen Bewerbung – egal ob sie aus der automatischen Suche (Button *Analysieren*), als **PDF-Anzeige** (Stellen → *PDF-Anzeige hochladen*) oder als eingefügter Text kommt.
+Die Analyse-Ebene führt eine einzelne Stelle in sechs Schritten zur fertigen Bewerbung – egal ob sie aus der automatischen Suche (Button *Analysieren*), als **hochgeladene Anzeige** (Stellen → *Anzeige hochladen*; PDF, Word, Markdown oder Bild) oder als eingefügter Text kommt.
 
 1. **Stelle** – Anzeige prüfen und bei Bedarf ergänzen.
 2. **Analyse** – Claude extrahiert Rolle, Aufgaben, Anforderungen (muss/kann/persönlich), Konditionen (Gehalt, Remote/Hybrid/Vor Ort, Vertrag, Benefits …) und priorisiert die wichtigsten Fakten gegen deine Wünsche aus dem Profil.
@@ -119,7 +127,7 @@ Die Analyse-Ebene führt eine einzelne Stelle in sechs Schritten zur fertigen Be
 5. **Anschreiben** – automatisch erstellen (Geschäftsbriefnorm, Sie-Form), danach den gesamten Text frei bearbeiten.
 6. **Abschluss** – PDFs speichern/herunterladen, Bewerbungsmappe bauen (inkl. Zertifikate/Nachweise), Tracker-Eintrag anlegen oder den Lebenslauf als Stammdaten übernehmen.
 
-Der Tab **Meine Lebensläufe** verwaltet die Bibliothek (bis zu 10 PDF-Uploads oder der Master aus dem Editor). Alles liegt lokal in `analyse/` (nicht im Repo).
+Der Tab **Meine Lebensläufe** verwaltet die Bibliothek (bis zu 10 Uploads in beliebigem unterstütztem Format oder der Master aus dem Editor). Alles liegt lokal in `analyse/` (nicht im Repo). Kein Text im Bild? Dann hilft die Texterkennung; Scans mit schlechter Qualität solltest du kurz gegenprüfen.
 
 Überall, wo das Cockpit PDFs annimmt (Lebensläufe, Stellenanzeigen, Zertifikate, Nachweise, Editor-Import), kannst du auch **Word-Dateien (docx/doc)**, **Markdown/Text (md, txt)** und **Bilder (png, jpg)** hochladen – sie werden automatisch in PDF umgewandelt (Word mit Microsoft Word, sonst `textutil` + Chrome; Markdown und Bilder per Chrome). Bilder ohne Text werden per macOS-Texterkennung (`ocr.swift`, Vision) ausgelesen.
 
@@ -191,7 +199,7 @@ Sechs Reiter:
 
    ![Zertifikate](docs/screenshots/06-zertifikate.png)
 
-   - Upload von PNG, JPG oder PDF per Drag & Drop (mehrere auf einmal)
+   - Upload von PNG, JPG, PDF, Word oder Markdown per Drag & Drop (mehrere auf einmal)
    - Miniaturansicht (PDF: erste Seite), Klick öffnet die Datei
    - Felder: Zertifikat, Aussteller, Datum, Zertifikats-Nummer,
      Zertifikats-URL, erlernte Skills
@@ -301,6 +309,7 @@ Sechs Reiter:
 | `lebenslauf.json` | Lebenslauf-Inhalte | **nein** |
 | `nachweise.json` | Zeugnisse & Nachweise | **nein** |
 | `unterlagen/` | hochgeladene Zertifikate, Zeugnisse, Miniaturen | **nein** |
+| `analyse/` | Stellenanalysen, Lebenslauf-Bibliothek, hochgeladene Anzeigen | **nein** |
 | `bewerbungen/` | Lebensläufe, Anschreiben, Bewerbungsmappen | teilweise |
 | `bewerbungen_tracker.csv` | Bewerbungs-Pipeline | ja |
 | `jobs_ranked.csv`, `jobs_gesehen.db`, Reports | Ergebnisse der Suchläufe | nein |
@@ -322,15 +331,19 @@ lokale Claude-Code-CLI aufgerufen.
 job_scout.py        Fetcher (BA, Adzuna, Arbeitnow, Himalayas, LinkedIn-Datei) → Scoring → Report/CSV/SQLite
 skill_radar.py      Skill-Katalog + Status → Nachfrage-Analyse → skill_report.html
 jobscout_app.py     HTTP-Server (Standardbibliothek) + API für das Cockpit
-cv_editor.py        Profil, Lebenslauf, PDF-Import/-Export, Zertifikats-Uploads
+cv_editor.py        Profil, Lebenslauf, PDF-Import/-Export, Datei-Umwandlung (Word/MD/Bild → PDF), Uploads
 unterlagen.py       Zeugnisse & Nachweise, Bewerbungsmappe
-app/                Frontend: index.html, app.css, app.js, einstellungen.js, lebenslauf.js
+analyse.py          Analyse-Ebene: Stellenanalyse, Lebenslauf-Bibliothek, Vergleich, Anschreiben
+ocr.swift           Texterkennung für Bilder/Scans (macOS Vision)
+start_cockpit.sh    Start der Desktop-App (JobScout.app)
+app/                Frontend: index.html, app.css, app.js, analyse.js, einstellungen.js, lebenslauf.js
 ```
 
 **Ablaufdiagramm:** Funktion und Arbeitsweise im Detail (12 Spalten, vom
-Start bis zur Bewerbungsmappe) – [PNG](docs/JobScout-Ablaufdiagramm.png) ·
-[draw.io-Quelle](docs/JobScout-Ablaufdiagramm.drawio)
+Start bis zur Bewerbungsmappe) – [PNG](docs/Architektur/JobScout-Ablaufdiagramm.png) ·
+[draw.io-Quelle](docs/Architektur/JobScout-Ablaufdiagramm.drawio) ·
+[Scoring-Engine](docs/Architektur/job_scout_scoring_engine.png)
 
 **Tech-Stack:** Python 3.9+ (nur Standardbibliothek + `requests` für den
 Scraper) · SQLite · Vanilla JavaScript ohne Build-Schritt · Poppler
-(`pdftotext`, `pdftoppm`, `pdfunite`) · Chrome headless · Claude Code CLI
+(`pdftotext`, `pdftoppm`, `pdfunite`) · macOS Vision (OCR) · Chrome headless · Claude Code CLI
