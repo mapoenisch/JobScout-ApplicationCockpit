@@ -589,16 +589,40 @@ def exportiere_pdf(daten: dict) -> dict:
     if zusatz:
         name += f"_{zusatz}"
     ziel = BEWERBUNGEN_DIR / f"{name}.pdf"
-    zoom = _zoom_aus(html)
-    for _ in range(6):
+    seiten, zoom = _drucke_cv(chrome, html, ziel, bool(daten.get("eine_seite")))
+    return {"ok": True, "pfad": str(ziel.relative_to(BASIS)), "seiten": seiten,
+            "zoom": zoom, "datum": date.today().isoformat()}
+
+
+ZOOM_STUFEN = (1.0, 0.92, 0.85, 0.78, 0.72)
+
+
+def _drucke_cv(chrome: str, html: str, ziel: Path, eine_seite: bool) -> tuple[int, float]:
+    """Druckt das CV; bei „Auf eine Seite“ wird stufenweise verkleinert,
+    bis es passt. Gibt (Seitenzahl, Zoom) zurück."""
+    stufen = ZOOM_STUFEN if eine_seite else (1.0,)
+    for zoom in stufen:
+        html = re.sub(r"zoom: [0-9.]+;", f"zoom: {zoom};", html, count=1)
         _drucke(chrome, html, ziel)
         seiten = _seiten(ziel)
-        if not daten.get("eine_seite") or seiten <= 1 or zoom <= 0.62:
+        if seiten <= 1:
             break
-        zoom = round(zoom * 0.95, 3)
-        html = re.sub(r"zoom: [0-9.]+;", f"zoom: {zoom};", html, count=1)
-    return {"ok": True, "pfad": str(ziel.relative_to(BASIS)), "seiten": seiten,
-            "datum": date.today().isoformat()}
+    return seiten, zoom
+
+
+def vorschau_pdf(daten: dict) -> dict:
+    """Echte PDF-Vorschau (Seitenumbrüche, Ränder) – nichts wird gespeichert."""
+    html = daten.get("html") or ""
+    if "<html" not in html[:300].lower() or len(html) > 2_000_000:
+        raise ValueError("Ungültiges Lebenslauf-HTML")
+    chrome = _chrome()
+    if not chrome:
+        raise RuntimeError("Kein Chrome gefunden")
+    with tempfile.TemporaryDirectory() as tmp:
+        ziel = Path(tmp) / "vorschau.pdf"
+        seiten, zoom = _drucke_cv(chrome, html, ziel, bool(daten.get("eine_seite")))
+        return {"ok": True, "pdf": base64.b64encode(ziel.read_bytes()).decode(),
+                "seiten": seiten, "zoom": zoom}
 
 
 def _zoom_aus(html: str) -> float:

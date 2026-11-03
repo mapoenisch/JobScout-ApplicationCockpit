@@ -600,11 +600,13 @@ function cvDokument(zoom = 1) {
   const schrift = d.schrift === "serif" ? 'Georgia, "Times New Roman", serif' : 'Helvetica, Arial, "Liberation Sans", sans-serif';
   return `<!doctype html><html lang="${d.titel_de ? "de" : "en"}"><head><meta charset="utf-8"><title>Lebenslauf ${esc(name)}</title>
 <style>
-@page { size: A4; margin: 0; }
+@page { size: A4; margin: 15mm 17mm 14mm; }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #fff; }
 body { font-family: ${schrift}; color: #1d2130; font-size: 10pt; line-height: 1.42; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.seite { width: 210mm; padding: 15mm 17mm 14mm; zoom: ${zoom}; }
+.seite { zoom: ${zoom}; }
+h2 { break-after: avoid; }
+li { break-inside: avoid; }
 h1 { font-size: 21pt; margin: 0; color: ${d.akzent}; letter-spacing: -.01em; line-height: 1.15; }
 .headline { font-size: 11.5pt; color: #4a4f63; margin-top: 3px; }
 .kontakt { font-size: 8.8pt; color: #4a4f63; margin-top: 5px; }
@@ -627,36 +629,59 @@ ${abschnitte}
 </div></body></html>`;
 }
 
-function planeVorschau(ms = 250) {
+function planeVorschau(ms = 600) {
   clearTimeout(CV.vorschauTimer);
   CV.vorschauTimer = setTimeout(zeichneVorschau, ms);
 }
 
 const A4_PX = { b: 794, h: 1123 };   // A4 bei 96 dpi
 
-function zeichneVorschau() {
+/* Vorschau = das echte PDF (Seitenumbrüche und Ränder wie im Export). */
+async function zeichneVorschau() {
   const frame = $("#cv-vorschau");
   if (!frame) return;
-  const html = cvDokument(1);
+  const nr = (CV.vorschauNr = (CV.vorschauNr || 0) + 1);
+  const info = $("#cv-seiten");
+  if (!CV.chrome) { zeichneHtmlVorschau(frame); return; }
+  if (info) info.textContent = "Vorschau wird erstellt …";
+  let r;
+  try {
+    r = await api("/api/cv/vorschau", { html: cvDokument(1), eine_seite: CV.cv.design.eine_seite });
+  } catch (e) {
+    if (nr === CV.vorschauNr && info) info.textContent = `Vorschau nicht möglich: ${e.message}`;
+    return;
+  }
+  if (nr !== CV.vorschauNr || !$("#cv-vorschau")) return;   // neuere Anfrage läuft
+  CV.zoom = r.zoom;
+  CV.seiten = r.seiten;
+  const bytes = Uint8Array.from(atob(r.pdf), (c) => c.charCodeAt(0));
+  if (CV.pdfUrl) URL.revokeObjectURL(CV.pdfUrl);
+  CV.pdfUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  frame.style.height = `${Math.max(A4_PX.h, r.seiten * A4_PX.h)}px`;
+  frame.src = `${CV.pdfUrl}#toolbar=0&navpanes=0&view=FitH`;
+  skaliereVorschau();
+  if (info) {
+    info.textContent = `${r.seiten} Seite${r.seiten > 1 ? "n" : ""} · A4 · mit Seitenrändern`
+      + (r.zoom < 1 ? ` · auf ${Math.round(r.zoom * 100)} % verkleinert` : "")
+      + (CV.cv.design.eine_seite && r.seiten > 1 ? " – zu viel Inhalt für eine Seite, bitte kürzen" : "");
+  }
+  if (CV_SCHRITTE[CV.schritt][0] === "check" && $("#ats-box")) $("#ats-box").innerHTML = atsHtml(atsCheck());
+}
+
+/* Fallback ohne Chrome: HTML-Vorschau (ohne echte Seitenumbrüche). */
+function zeichneHtmlVorschau(frame) {
   frame.onload = () => {
     const doc = frame.contentDocument;
-    const hoehe = doc.querySelector(".seite").scrollHeight;
-    CV.seitenRoh = hoehe / A4_PX.h;
-    CV.zoom = CV.cv.design.eine_seite && hoehe > A4_PX.h ? Math.max(.72, A4_PX.h / hoehe - .005) : 1;
-    if (CV.zoom < 1) doc.querySelector(".seite").style.zoom = CV.zoom;
-    const neueHoehe = hoehe * CV.zoom;
-    CV.seiten = Math.max(1, Math.ceil(neueHoehe / A4_PX.h - .02));
+    const hoehe = doc.querySelector(".seite").scrollHeight + 2 * 57;
+    CV.seiten = Math.max(1, Math.ceil(hoehe / A4_PX.h - .02));
     frame.style.height = `${Math.max(A4_PX.h, CV.seiten * A4_PX.h)}px`;
     skaliereVorschau();
     const info = $("#cv-seiten");
-    if (info) {
-      info.textContent = `${CV.seiten} Seite${CV.seiten > 1 ? "n" : ""} · A4`
-        + (CV.zoom < 1 ? ` · auf ${Math.round(CV.zoom * 100)} % verkleinert` : "")
-        + (CV.cv.design.eine_seite && CV.zoom <= .72 && CV.seiten > 1 ? " – zu viel Inhalt für eine Seite, bitte kürzen" : "");
-    }
+    if (info) info.textContent = `ca. ${CV.seiten} Seite${CV.seiten > 1 ? "n" : ""} · A4 (Näherung – ohne Chrome keine exakte Vorschau)`;
     if (CV_SCHRITTE[CV.schritt][0] === "check" && $("#ats-box")) $("#ats-box").innerHTML = atsHtml(atsCheck());
   };
-  frame.srcdoc = html;
+  frame.removeAttribute("src");
+  frame.srcdoc = cvDokument(1).replace("</style>", "body { padding: 15mm 17mm 14mm; }</style>");
 }
 
 function skaliereVorschau() {
@@ -673,7 +698,7 @@ async function speichereCvPdf(zusatz, knopf) {
   if (!name) { toast("Bitte zuerst im Profil deinen Namen eintragen", true); return null; }
   if (!CV.chrome) { druckeCv(); return null; }
   if (knopf) knopf.disabled = true;
-  const r = await sicher(() => api("/api/cv/pdf", { html: cvDokument(CV.zoom), name, zusatz, eine_seite: CV.cv.design.eine_seite }));
+  const r = await sicher(() => api("/api/cv/pdf", { html: cvDokument(1), name, zusatz, eine_seite: CV.cv.design.eine_seite }));
   if (knopf) knopf.disabled = false;
   if (r) toast(`In Unterlagen gespeichert: ${r.pfad}`);
   return r;
@@ -720,7 +745,7 @@ function importDialog() {
     drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("aktiv"); hinzu(e.dataTransfer.files); });
     $("#imp-start", d).addEventListener("click", async () => {
       const pfade = $$("[data-imp-pfad]:checked", d).map((x) => x.value);
-      if (!dateien.length && !pfade.length) { toast("Bitte mindestens eine PDF wählen", true); return; }
+      if (!dateien.length && !pfade.length) { toast("Bitte mindestens eine Datei wählen", true); return; }
       const knopf = $("#imp-start", d);
       knopf.disabled = true;
       $("#imp-status", d).innerHTML = `<div class="hinweis info"><span class="spinner"></span><div>Claude liest deine Unterlagen … das dauert meist 30–90 Sekunden.</div></div>`;

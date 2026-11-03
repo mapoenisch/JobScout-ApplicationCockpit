@@ -878,6 +878,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(cv_editor.speichere_lebenslauf(daten))
             if pfad == "/api/cv/import":
                 return self._json(cv_editor.importiere_pdfs(daten))
+            if pfad == "/api/cv/vorschau":
+                return self._json(cv_editor.vorschau_pdf(daten))
             if pfad == "/api/cv/pdf":
                 return self._json(cv_editor.exportiere_pdf(daten))
             if pfad == "/api/unterlagen/upload":
