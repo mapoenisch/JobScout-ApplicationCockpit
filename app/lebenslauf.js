@@ -28,6 +28,9 @@ const LEER = {
   eigene: { titel: "", punkte: [] },
   nachweise: { typ: "", titel: "", aussteller: "", datum: "", note: "", notiz: "", auswertung: "", kontakt_name: "", kontakt_position: "", kontakt_email: "", kontakt_telefon: "", datei: "", vorschau: "" },
   sprachen: { sprache: "", niveau: "" },
+  stationen: { id: "", titel: "", unternehmen: "", ort: "", von: "", bis: "", notizen: "", woertlich: false },
+  ausbildung: { id: "", titel: "", institut: "", ort: "", von: "", bis: "", notizen: "", woertlich: false },
+  extras: { id: "", titel: "", von: "", bis: "", notizen: "", woertlich: false },
 };
 const ICON_CV = {
   up: '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
@@ -47,9 +50,9 @@ async function ladeCv(neu = false) {
   return true;
 }
 
-const SPEICHER = { p: "profil", c: "cv", n: "nachweise" };
-/* Daten-Ziele: p = Profil, c = Lebenslauf, n = Unterlagen (Pfade „nachweise.…“) */
-function datenVon(ziel) { return ziel === "p" ? CV.profil : ziel === "n" ? UNT : CV.cv; }
+const SPEICHER = { p: "profil", c: "cv", n: "nachweise", f: "formulieren" };
+/* Daten-Ziele: p = Profil, c = Lebenslauf, n = Unterlagen (Pfade „nachweise.…“), f = Entwurf in „CV neu formulieren“ */
+function datenVon(ziel) { return ziel === "p" ? CV.profil : ziel === "n" ? UNT : ziel === "f" ? FO.e : CV.cv; }
 const pfadTeile = (pfad) => pfad.split(".").map((k) => (/^\d+$/.test(k) ? +k : k));
 function holen(obj, pfad) { return pfadTeile(pfad).reduce((o, k) => o?.[k], obj); }
 function setzen(obj, pfad, wert) {
@@ -64,6 +67,7 @@ function speichereSpaeter(was) {
   CV.saveTimer[was] = setTimeout(async () => {
     try {
       if (was === "nachweise") await api("/api/nachweise", { nachweise: UNT.nachweise });
+      else if (was === "formulieren") await foSpeichern();
       else await api(was === "profil" ? "/api/profil" : "/api/cv", was === "profil" ? CV.profil : CV.cv);
       if (pill) { pill.textContent = "Gespeichert"; pill.className = "chip ok"; }
     } catch (e) {
@@ -101,7 +105,7 @@ function feld(ziel, pfad, label, opt = {}) {
 function verdrahteEingaben(root, nachher) {
   root.addEventListener("input", (e) => {
     const el = e.target;
-    const kurz = ["p", "c", "n"].find((k) => el.dataset[k] !== undefined);
+    const kurz = ["p", "c", "n", "f"].find((k) => el.dataset[k] !== undefined);
     if (!kurz) return;
     setzen(datenVon(kurz), el.dataset[kurz], eingabeWert(el));
     speichereSpaeter(SPEICHER[kurz]);
@@ -259,7 +263,7 @@ async function renderLebenslauf() {
   $("#cv-import").onclick = importDialog;
   $("#cv-download").onclick = exportierePdf;
   const d = CV.cv.design;
-  $("#view").innerHTML = `<div class="cv-layout">
+  $("#view").innerHTML = `${ebenenLeiste("ats")}<div class="cv-layout">
     <div class="cv-editor">
       <div class="card cv-fortschritt">
         <div class="zeile-main"><b id="cv-name"></b><span class="muted small" id="cv-quote-text"></span></div>
@@ -315,6 +319,14 @@ async function renderLebenslauf() {
   verdrahteDateien(box, zeichneSchritt);
   new ResizeObserver(() => skaliereVorschau()).observe($("#cv-rahmen"));
   zeichneSchritt();
+}
+
+/* Umschalter zwischen den Ebenen des Lebenslauf-Editors */
+function ebenenLeiste(aktiv) {
+  const reiter = [["ats", "#lebenslauf", "ATS-Editor", "Eigene Texte eintragen und auf ATS-Lesbarkeit prüfen"],
+    ["neu", "#formulieren", "CV neu formulieren", "Aus Stichpunkten bewerbungsfertige Formulierungen für eine Stelle"]];
+  return `<div class="tabs ebenen">${reiter.map(([id, ziel, name, text]) =>
+    `<a class="tab ${id === aktiv ? "active" : ""}" href="${ziel}" title="${text}">${name}</a>`).join("")}</div>`;
 }
 
 function designSetzen(key, wert) {

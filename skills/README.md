@@ -15,3 +15,4 @@ Prompt-Versionen liegen im Projektordner als `prompt_*.txt` und werden über die
 | `jobfilter--bewerbungsassistent-2` | Vorgänger, Donnerstag-Variante | abgelöst durch Bewerbungs-Workflow |
 | `interview-prep` | Cowork-Version | `prompt_interview_prep_template.txt` / `run_interview_prep.command` |
 | `skill-gap-analyse--kurssuche` | eigene Variante (liest `jobs_ranked.csv` direkt) | `prompt_skill_gap_analyse.txt` nutzt dagegen `skill_radar.py` |
+| `lebenslauf-cockpit` | **aktiv im Cockpit** (Lebenslauf-Editor → „CV neu formulieren“) | Kopie von `~/.claude/skills/lebenslauf-stellenanpassung`; Abweichungen stehen nur in `COCKPIT.md`, `cv_formulieren.py` lädt beides |

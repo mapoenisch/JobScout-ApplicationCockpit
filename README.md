@@ -76,6 +76,16 @@ Browser; anderer Port per `JOBSCOUT_PORT`). Das App-Icon liegt in `assets/`.
   Lebenslauf-Vorschläge → Anschreiben → Bewerbungsmappe
 - Bibliothek mit bis zu 10 Lebensläufen
 
+**CV neu formulieren** (zweite Ebene im Lebenslauf-Editor)
+- Aus losen Stichpunkten in Feldern oder einem optionalen CV-Entwurf entsteht für
+  eine konkrete Stelle ein bewerbungsfertiger Lebenslauf; eigene Texte lassen sich
+  je Eintrag wörtlich übernehmen
+- Abgleich mit der Anzeige, gezielte Rückfragen, optionales Kurzprofil mit Belegen,
+  Faktencheck, Prüfbericht und Faktenregister; nichts wird erfunden
+- Regeln aus `skills/lebenslauf-cockpit` (Kopie des Skills `lebenslauf-stellenanpassung`,
+  Abweichungen in `COCKPIT.md`), Code in `cv_formulieren.py` und `app/formulieren.js`,
+  Entwürfe lokal unter `formulieren/`. Tests: `python3 tests/test_cv_formulieren.py`
+
 **Profil & Unterlagen**
 - Profilseite als zentrale Quelle für alle persönlichen Daten
 - Lebenslauf-Editor mit Live-Vorschau, ATS-Check und PDF-Export

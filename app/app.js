@@ -131,7 +131,8 @@ const VIEWS = {
 function route() {
   const name = (location.hash || "#dashboard").slice(1).split("?")[0];
   const view = VIEWS[name] ? name : "dashboard";
-  $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === view));
+  const navView = view === "formulieren" ? "lebenslauf" : view;   // weitere Ebene des Editors
+  $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === navView));
   $("#sidebar").classList.remove("offen");
   VIEWS[view]();
   window.scrollTo(0, 0);

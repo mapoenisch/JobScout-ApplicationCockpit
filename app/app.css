@@ -529,3 +529,27 @@ label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 12
   .an-rechts { position: static; max-height: none; }
   .an-spalten { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- Ebene „CV neu formulieren“ ---------- */
+.tabs.ebenen .tab:hover { text-decoration: none; }
+.fo-start { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.fo-start button { text-align: left; font: inherit; color: inherit; cursor: pointer; display: grid; gap: 6px; align-content: start; }
+.fo-start button:hover { border-color: var(--accent); }
+.fo-start h2 { display: flex; align-items: center; gap: 8px; }
+.fo-start p { margin: 0; color: var(--muted); }
+.cv-schritte.fo { grid-template-columns: repeat(4, 1fr); }
+.fo-wahl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.fo-frage { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px; display: grid; gap: 8px; background: var(--surface-2); }
+.fo-frage > b { font-weight: 650; }
+.fo-option { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.fo-frage .fo-option { margin-bottom: 0; }
+.fo-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.fo-option input { margin-top: 3px; accent-color: var(--accent); flex: none; }
+.fo-option > span { display: grid; min-width: 0; }
+.fo-option .muted { overflow-wrap: anywhere; }
+.fo-arbeit { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 12px; background: var(--info-soft); margin-bottom: 12px; }
+.fo-warnungen { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
+.fo-bericht { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; background: var(--surface-2); border-radius: 10px; padding: 12px 14px; max-height: 480px; overflow: auto; }
+.fo-bilder { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fo-kp-zeile { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr) 34px; gap: 8px; margin-bottom: 8px; align-items: end; }
+@media (max-width: 640px) { .fo-start, .fo-bilder { grid-template-columns: minmax(0, 1fr); } }

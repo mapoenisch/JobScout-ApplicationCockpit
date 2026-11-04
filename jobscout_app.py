@@ -39,6 +39,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 import analyse
 import cv_editor
+import cv_formulieren
 import unterlagen
 
 # ============================================================
@@ -757,6 +758,8 @@ STATISCH = {
                        "application/javascript; charset=utf-8"),
     "/analyse.js": (APP_DIR / "analyse.js",
                     "application/javascript; charset=utf-8"),
+    "/formulieren.js": (APP_DIR / "formulieren.js",
+                        "application/javascript; charset=utf-8"),
     "/report/jobs": (BASIS / "jobs_report.html", "text/html; charset=utf-8"),
     "/report/skills": (BASIS / "skill_report.html", "text/html; charset=utf-8"),
 }
@@ -842,6 +845,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 return self.wfile.write(body)
+            if url.path == "/api/formulieren":
+                return self._json(cv_formulieren.uebersicht())
+            if url.path == "/api/formulieren/entwurf":
+                return self._json(cv_formulieren.entwurf_lesen(
+                    parse_qs(url.query).get("id", [""])[0]))
             if url.path == "/api/task":
                 name = parse_qs(url.query).get("name", [""])[0]
                 return self._json(_task_info(name) if name in TASKS
@@ -866,6 +874,9 @@ class Handler(BaseHTTPRequestHandler):
             if pfad.startswith("/api/analyse/"):
                 return self._json(analyse.aktion(pfad[len("/api/analyse/"):],
                                                  daten))
+            if pfad.startswith("/api/formulieren/"):
+                return self._json(cv_formulieren.aktion(
+                    pfad[len("/api/formulieren/"):], daten))
             if pfad == "/api/tracker":
                 return self._json(tracker_aktion(daten))
             if pfad == "/api/task":
