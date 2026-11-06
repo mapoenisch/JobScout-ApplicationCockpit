@@ -264,14 +264,92 @@ class Render(Grundlage):
         self.assertNotEqual(r1["pfad"], r3["pfad"])                    # fremde Datei bleibt
 
 
-class SkillKopie(unittest.TestCase):
-    def test_renderer_und_regeln_entsprechen_dem_original(self):
-        original = Path.home() / ".claude/skills/lebenslauf-stellenanpassung"
-        if not original.exists():
-            self.skipTest("Original-Skill nicht vorhanden")
+class CockpitSkill(unittest.TestCase):
+    def test_cockpitversion_ist_eigenstaendig_und_vollstaendig(self):
+        self.assertEqual(fo.SKILL_DIR.name, "lebenslauf-stellenanpassung-cockpitversion")
         for rel in ("SKILL.md", "scripts/render_cv.py", "references/best-practices-modul4.md",
                     "references/formulierungen.md", "references/fragenkatalog.md"):
-            self.assertEqual((original / rel).read_text(), (fo.SKILL_DIR / rel).read_text(), rel)
+            self.assertTrue((fo.SKILL_DIR / rel).exists(), rel)
+        kopf = (fo.SKILL_DIR / "SKILL.md").read_text(encoding="utf-8").split("---")[1]
+        self.assertIn("name: lebenslauf-stellenanpassung-cockpitversion", kopf)
+
+    def test_skill_text_kommt_nur_aus_der_cockpitversion(self):
+        text = fo._skill_text({"modus": "neu"}, "references/formulierungen.md")
+        self.assertIn("Cockpit-Version", text)
+        self.assertNotIn("cv-from-little-or-nothing", text)
+
+    def test_keine_skill_datei_verweist_auf_globale_skills(self):
+        for wurzel in (fo.SKILL_DIR, fo.SKILL_DIR_BASIS):
+            for datei in wurzel.rglob("*"):
+                if datei.is_file() and datei.suffix in (".md", ".py", ".json"):
+                    self.assertNotIn(".claude/skills", datei.read_text(encoding="utf-8"), str(datei))
+
+    def test_basisversion_ist_eigenstaendig_und_ohne_globale_pfade(self):
+        self.assertEqual(fo.SKILL_DIR_BASIS.name, "cv-from-little-or-nothing-cockpitversion")
+        for rel in ("SKILL.md", "references/fragenkatalog.md"):
+            self.assertTrue((fo.SKILL_DIR_BASIS / rel).exists(), rel)
+        for rel in ("SKILL.md", "references/fragenkatalog.md"):
+            t = (fo.SKILL_DIR_BASIS / rel).read_text(encoding="utf-8")
+            self.assertNotIn(".claude/skills", t, rel)
+        kopf = (fo.SKILL_DIR_BASIS / "SKILL.md").read_text(encoding="utf-8").split("---")[1]
+        self.assertIn("name: cv-from-little-or-nothing-cockpitversion", kopf)
+
+
+class Basis(unittest.TestCase):
+    """Modus „basis“: Basis-CV ohne Stelle (Skill cv-from-little-or-nothing-cockpitversion)."""
+
+    def setUp(self):
+        Grundlage.setUp(self)
+        self.id = fo.anlegen({"modus": "basis"})["entwurf"]["id"]
+        fo.speichern({"id": self.id, "zielrichtung": "Vertriebsinnendienst, SDR",
+                      "eingabe": {"stationen": [{"id": "aaaaaaaaaa", "titel": "Kaufmann",
+                                                 "unternehmen": "Raiffeisen", "von": "01/2022",
+                                                 "bis": "10/2025", "notizen": "kunden betreut"}]}})
+
+    def test_ohne_stelle_startbar_und_andere_modi_unveraendert(self):
+        with mock.patch.object(fo, "_frage", return_value=runde(fertig=True)) as m:
+            e = fo.analysieren({"id": self.id})["entwurf"]
+        self.assertTrue(e["fragen_fertig"])
+        prompt = m.call_args.args[0]
+        self.assertIn("KEINE Stellenanzeige", prompt)
+        self.assertIn("Vertriebsinnendienst, SDR", prompt)
+        self.assertNotIn("DATEN STELLENANZEIGE", prompt)
+        self.assertIn("Basis-Lebenslauf aus wenig oder nichts", prompt)   # SKILL.md des Basis-Skills
+        self.assertIn("Fragenkatalog", prompt.replace("fragenkatalog", "Fragenkatalog"))
+        self.assertEqual(fo._info(e)["position"], "Basis-Lebenslauf")
+
+    def test_umformulieren_verlangt_weiter_eine_stelle(self):
+        eid = fo.anlegen({"modus": "umformulieren"})["entwurf"]["id"]
+        fo.speichern({"id": eid, "eingabe": {"stationen": [{"titel": "X"}]}})
+        with self.assertRaises(ValueError):
+            fo.analysieren({"id": eid})
+
+    def test_zielrichtung_faellt_auf_profil_wunschrolle_zurueck(self):
+        cv.speichere_profil({**cv.lade_profil(),
+                             "beruf": {**cv.lade_profil()["beruf"], "wunschrollen": ["Digitaler B2B-Vertrieb"]}})
+        fo.speichern({"id": self.id, "zielrichtung": ""})
+        self.assertEqual(fo._zielrichtung(fo._lade(self.id)), "Digitaler B2B-Vertrieb")
+
+    def test_formulieren_nutzt_basisprompt_und_pdf_ohne_firmenzusatz(self):
+        with mock.patch.object(fo, "_frage", return_value=runde()):
+            fo.analysieren({"id": self.id})
+        fo.kp_status({"id": self.id, "status": "nein"})
+        antwort = {"cv": {"berufserfahrung": [{"quelle_id": "aaaaaaaaaa", "titel": "Kaufmann",
+                                               "unternehmen": "Raiffeisen", "punkte": ["Kunden betreut"]}]},
+                   "aenderungen": [], "wirkung": []}
+        with mock.patch.object(fo, "_frage", return_value=antwort) as m, \
+                mock.patch.object(fo, "_render", return_value={"seiten": 2, "warnungen": []}):
+            e = fo.formulieren({"id": self.id})["entwurf"]
+        prompt = m.call_args.args[0]
+        self.assertIn("OHNE Stellenbezug", prompt)
+        self.assertIn("VERBINDLICHES SCHEMA", prompt)                    # Schema der Job-Coach gilt auch hier
+        self.assertEqual(e["cv"]["dateizusatz"], "")
+        self.assertIn("Basis-Lebenslauf ohne Stelle", fo._faktenregister(e, e["cv"]))
+
+    def test_basis_skill_text_enthaelt_gemeinsame_und_eigene_referenzen(self):
+        text = fo._skill_text({"modus": "basis"}, "references/fragenkatalog.md")
+        self.assertIn("gemeinsame Grundlage", text)
+        self.assertIn("Basis-Skill, Ergänzung", text)
 
 
 if __name__ == "__main__":

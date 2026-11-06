@@ -75,16 +75,23 @@ Browser; anderer Port per `JOBSCOUT_PORT`). Das App-Icon liegt in `assets/`.
   Text eingefügt) → KI-Analyse → Vergleich mit bis zu 3 Lebensläufen →
   Lebenslauf-Vorschläge → Anschreiben → Bewerbungsmappe
 - Bibliothek mit bis zu 10 Lebensläufen
+- Verbindliches Schema der Job-Coach: laufende Weiterbildung und „Berufliche Neuorientierung, Ziel: Positionierung als …“ stehen oben in der Berufserfahrung (echte Zeiträume), die Weiterbildung zusätzlich einzeilig in der Ausbildung; Lücken über 2 Monate werden mit Grund benannt. Code: `cv_editor.wende_schema_an` und `SCHEMA_REGELN` (auch in den Claude-Prompts), Tests: `python3 tests/test_cv_schema.py`
 
-**CV neu formulieren** (zweite Ebene im Lebenslauf-Editor)
+**CV neu formulieren** (zweite Ebene im Lebenslauf-Editor, drei Einstiege: „CV-Entwurf umformulieren“,
+„Von Grund auf neu formulieren“ und „Basis-CV erstellen“)
 - Aus losen Stichpunkten in Feldern oder einem optionalen CV-Entwurf entsteht für
   eine konkrete Stelle ein bewerbungsfertiger Lebenslauf; eigene Texte lassen sich
   je Eintrag wörtlich übernehmen
 - Abgleich mit der Anzeige, gezielte Rückfragen, optionales Kurzprofil mit Belegen,
   Faktencheck, Prüfbericht und Faktenregister; nichts wird erfunden
-- Regeln aus `skills/lebenslauf-cockpit` (Kopie des Skills `lebenslauf-stellenanpassung`,
-  Abweichungen in `COCKPIT.md`), Code in `cv_formulieren.py` und `app/formulieren.js`,
+- Regeln aus `skills/lebenslauf-stellenanpassung-cockpitversion` (eigenständige, nur im Cockpit
+  gültige Version des globalen Skills `lebenslauf-stellenanpassung`; der Original-Skill
+  liegt nicht im Repo), Code in `cv_formulieren.py` und `app/formulieren.js`,
   Entwürfe lokal unter `formulieren/`. Tests: `python3 tests/test_cv_formulieren.py`
+- **Basis-CV erstellen** (Modus `basis`): vollständiger, ehrlicher Lebenslauf ohne Stelle, mit Feld
+  „Zielrichtung“ statt Stellenanzeige. Regeln aus `skills/cv-from-little-or-nothing-cockpitversion`
+  (eigenständige, nur im Cockpit gültige Version des globalen Skills `cv-from-little-or-nothing`;
+  Renderer und gemeinsame Referenzen kommen aus der Stellenanpassungs-Version)
 
 **Profil & Unterlagen**
 - Profilseite als zentrale Quelle für alle persönlichen Daten

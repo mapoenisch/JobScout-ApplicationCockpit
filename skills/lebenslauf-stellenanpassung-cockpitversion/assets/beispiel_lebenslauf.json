@@ -1,0 +1,141 @@
+{
+  "_hinweis": "Schema-Beispiel mit fiktiven Daten (Max Mustermann). Felder ohne Wert weglassen statt leer füllen. Felder mit _ am Anfang werden ignoriert.",
+  "dateizusatz": "",
+  "person": {
+    "name": "Max Mustermann",
+    "adresse": "Musterstraße 1, 04109 Leipzig",
+    "telefon": "+49 151 12345678",
+    "email": "max.mustermann@example.com",
+    "linkedin": "linkedin.com/in/max-mustermann",
+    "verfuegbar_ab": "01.12.2026",
+    "kinderbetreuung": "gesichert",
+    "foto": ""
+  },
+  "kurzprofil": [
+    {
+      "schlagwort": "Erfahrung",
+      "fakt": "Knapp 4 Jahre B2B-Innendienst im Großhandel, Weiterbildung zum Digital Sales Manager."
+    },
+    {
+      "schlagwort": "Kundenbetreuung",
+      "fakt": "Ca. 30 Stammkunden aus dem Baugewerbe eigenverantwortlich betreut."
+    },
+    {
+      "schlagwort": "Angebote",
+      "fakt": "Ca. 20 Angebote pro Woche erstellt und telefonisch nachgefasst."
+    }
+  ],
+  "berufserfahrung": [
+    {
+      "von": "11/2025",
+      "bis": "heute",
+      "titel": "Berufliche Neuorientierung, Zielposition: Customer Success Manager",
+      "unter": [
+        {
+          "von": "05/2026",
+          "bis": "01/2027",
+          "titel": "Weiterbildung zum Digital Sales Manager, remote",
+          "zeilen": [
+            "Schwerpunkte: Kundenkommunikation, CRM-Systeme (HubSpot, Salesforce), Kundenbetreuung, Prozessverständnis"
+          ]
+        }
+      ]
+    },
+    {
+      "von": "01/2022",
+      "bis": "10/2025",
+      "titel": "Kaufmann im Großhandel (B2B)",
+      "unternehmen": "Muster Handels GmbH",
+      "ort": "Erfurt",
+      "punkte": [
+        "Ca. 30 Stammkunden aus dem Baugewerbe eigenverantwortlich betreut",
+        "Ca. 20 Angebote pro Woche erstellt und telefonisch nachgefasst",
+        "Kunden- und Artikelstammdaten im SAP gepflegt"
+      ],
+      "beendigungsgrund": "befristet"
+    },
+    {
+      "von": "12/2018",
+      "bis": "12/2021",
+      "titel": "Auf Jobsuche",
+      "fett": true
+    },
+    {
+      "von": "03/2018",
+      "bis": "11/2018",
+      "titel": "Aushilfe Verkauf",
+      "unternehmen": "Möbelhaus XY",
+      "ort": "Erfurt",
+      "punkte": [
+        "Kunden bei Fragen und Kaufentscheidungen unterstützt"
+      ]
+    }
+  ],
+  "weitere_stationen": [
+    {
+      "von": "03/2012",
+      "bis": "09/2016",
+      "titel": "Kommissionierer (Arbeitnehmerüberlassung)",
+      "unternehmen": "Logistik AG",
+      "ort": "Halle"
+    }
+  ],
+  "ausbildung": [
+    {
+      "von": "05/2026",
+      "bis": "01/2027",
+      "titel": "Digital Sales Manager",
+      "institut": "Digital Business Akademie GmbH",
+      "ort": "Berlin (remote)"
+    },
+    {
+      "von": "08/2019",
+      "bis": "01/2022",
+      "titel": "Ausbildung Kaufmann im Groß- und Außenhandel (IHK)",
+      "institut": "Muster Handels GmbH",
+      "ort": "Erfurt"
+    },
+    {
+      "von": "10/2009",
+      "bis": "09/2012",
+      "titel": "Wirtschaftswissenschaften (ohne Abschluss)",
+      "institut": "TU Chemnitz",
+      "ort": "Chemnitz"
+    },
+    {
+      "von": "",
+      "bis": "06/2007",
+      "titel": "Allgemeine Hochschulreife",
+      "institut": "Gymnasium Musterstadt",
+      "ort": "Musterstadt"
+    }
+  ],
+  "zusatzqualifikationen": {
+    "it": [
+      "MS Office: gute Kenntnisse",
+      "SAP SD: gute Kenntnisse (Berufspraxis)",
+      "HubSpot: Grundkenntnisse (zertifiziert: 08/2026)",
+      "Salesforce: Grundkenntnisse (Weiterbildung)"
+    ],
+    "sprachen": [
+      "Deutsch: Muttersprache",
+      "Englisch: gute Kenntnisse in Wort und Schrift"
+    ],
+    "fuehrerschein": "Klasse B"
+  },
+  "kernkompetenzen": [
+    "Kundenbetreuung",
+    "Bedarfsanalyse",
+    "Angebotserstellung",
+    "CRM (HubSpot, Salesforce)",
+    "Auftragsabwicklung",
+    "B2B-Vertrieb"
+  ],
+  "interessen": [],
+  "abschluss": {
+    "ort": "Leipzig",
+    "datum": "03.11.2026",
+    "unterschrift": ""
+  },
+  "_hinweis_kurzprofil": "Kurzprofil = 3, maximal 4 Zeilen {schlagwort, fakt}, nur nach „Ja“ in Phase 4b. Feld sonst weglassen. Regeln: references/formulierungen.md."
+}

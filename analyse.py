@@ -615,6 +615,7 @@ def fall_cv_waehlen(daten: dict) -> dict:
     fall["cv"] = json.loads(json.dumps(c["lebenslauf"]))
     fall["cv"]["zielstelle"] = {"rolle": fall["titel"], "firma": fall["firma"],
                                 "beschreibung": ""}
+    cv.wende_schema_an(fall["cv"])   # verbindliches Schema der Job-Coach
     fall["vorschlaege"] = []
     fall["anschreiben"] = None
     fall["schritt"] = max(fall.get("schritt", 0), 3)
@@ -634,6 +635,9 @@ HARTE REGELN:
   nicht im Lebenslauf bzw. Profil stehen. Lücken NICHT schönreden – nur
   melden (Feld "luecken").
 - Deutsch, sachlich, ohne Buzzword-Floskeln.
+- Das Schema für Weiterbildung und Neuorientierung (siehe unten) ist verbindlich:
+  Einträge daraus nicht entfernen, nicht umdatieren, nicht verschieben.
+{SCHEMA}
 - 5–12 Vorschläge, wichtigste zuerst. Jeder Vorschlag ändert genau EINE Stelle.
 - "pfad" ist ein Pfad im Lebenslauf-JSON, "art" legt die Wirkung fest:
   - "ersetzen": pfad zeigt auf einen Text. Erlaubt: "headline",
@@ -726,7 +730,8 @@ def fall_vorschlaege(daten: dict) -> dict:
     fall = _hole_fall(daten.get("id"))
     if not fall.get("cv"):
         raise ValueError("Bitte zuerst einen Lebenslauf wählen")
-    prompt = (VORSCHLAG_PROMPT.replace("{DATEN_HINWEIS}", DATEN_HINWEIS)
+    prompt = (VORSCHLAG_PROMPT.replace("{SCHEMA}", cv.SCHEMA_REGELN)
+              .replace("{DATEN_HINWEIS}", DATEN_HINWEIS)
               .replace("{ANALYSE}", json.dumps(fall["analyse"],
                                                ensure_ascii=False))
               .replace("{PROFIL}", json.dumps(_profil_kurz(),

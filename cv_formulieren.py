@@ -2,9 +2,13 @@
 """
 JobScout Cockpit – Editor-Ebene „CV neu formulieren“.
 
-Führt den Skill skills/lebenslauf-cockpit (Kopie von lebenslauf-stellenanpassung)
+Führt den Skill skills/lebenslauf-stellenanpassung-cockpitversion (eigenständige Cockpit-Version von lebenslauf-stellenanpassung)
 im Cockpit aus: Aus Feldern oder einem optionalen CV-Entwurf plus Stellenanzeige
 entsteht ein bewerbungsfertiger Lebenslauf, gerendert mit derselben render_cv.py.
+
+Dritter Modus „basis“: Der Skill skills/cv-from-little-or-nothing-cockpitversion erstellt aus
+denselben Feldern einen Basis-Lebenslauf OHNE Stelle (Zielrichtung statt Stellenanzeige).
+Beide Skills sind eigenständige Cockpit-Versionen; die Original-Skills liegen nicht im Repo.
 
 Was Claude nicht entscheidet, sondern dieses Modul erzwingt:
     - Persönliche Daten kommen nur aus dem Profil.
@@ -36,7 +40,9 @@ import analyse
 import cv_editor as cv
 
 ORDNER = cv.BASIS / "formulieren"
-SKILL_DIR = cv.BASIS / "skills" / "lebenslauf-cockpit"
+SKILL_DIR = cv.BASIS / "skills" / "lebenslauf-stellenanpassung-cockpitversion"
+SKILL_DIR_BASIS = cv.BASIS / "skills" / "cv-from-little-or-nothing-cockpitversion"
+MODI = ("umformulieren", "neu", "basis")
 RENDERER = SKILL_DIR / "scripts" / "render_cv.py"
 MAX_RUNDEN = 5
 MAX_FRAGEN = 4
@@ -44,6 +50,7 @@ _lock = threading.Lock()
 
 ENTWURF_FORM = {
     "stelle": {"text": "", "url": "", "firma": "", "position": ""},
+    "zielrichtung": "",
     "eingabe": {
         "stationen": [{"id": "", "titel": "", "unternehmen": "", "ort": "", "von": "",
                        "bis": "", "notizen": "", "woertlich": False}],
@@ -138,7 +145,9 @@ def _vergib_ids(eingabe: dict):
 
 def _info(e: dict) -> dict:
     s = e["stelle"]
-    return {"id": e["id"], "modus": e["modus"], "firma": s["firma"], "position": s["position"],
+    basis = e["modus"] == "basis"
+    return {"id": e["id"], "modus": e["modus"], "firma": "" if basis else s["firma"],
+            "position": "Basis-Lebenslauf" if basis else s["position"],
             "geaendert": e.get("geaendert", ""), "fertig": bool(e.get("cv")),
             "pdf": e.get("pdf_pfad", "")}
 
@@ -161,7 +170,7 @@ def entwurf_lesen(eid: str) -> dict:
 
 def anlegen(daten: dict) -> dict:
     modus = daten.get("modus")
-    if modus not in ("umformulieren", "neu"):
+    if modus not in MODI:
         raise ValueError("Unbekannter Modus")
     e = {"id": _neue_id(), "modus": modus, "erstellt": date.today().isoformat(),
          **cv.normalisiere({}, ENTWURF_FORM),
@@ -183,7 +192,7 @@ def speichern(daten: dict) -> dict:
         teile["stelle"]["text"] = str(daten["stelle"].get("text") or "").strip()[:analyse.MAX_STELLEN_TEXT]
 
     def anwenden(e):
-        for k in ("stelle", "eingabe", "persoenlich", "kurzprofil_zeilen"):
+        for k in ("stelle", "eingabe", "persoenlich", "kurzprofil_zeilen", "zielrichtung"):
             if k in daten:
                 e[k] = teile[k]
         _vergib_ids(e["eingabe"])
@@ -293,10 +302,24 @@ def _frage(prompt: str, timeout: int = 420) -> dict:
     return analyse._frage_claude(prompt, timeout=timeout)
 
 
-def _skill_text(*dateien: str) -> str:
-    teile = [(SKILL_DIR / "COCKPIT.md").read_text(encoding="utf-8"), "\n\n",
-             (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")]
-    teile += [f"\n\n===== {d} =====\n" + (SKILL_DIR / d).read_text(encoding="utf-8") for d in dateien]
+def _basis(e: dict) -> bool:
+    return e.get("modus") == "basis"
+
+
+def _skill_text(e: dict, *dateien: str) -> str:
+    """Regelwerk für die Prompts. Basis-Modus: SKILL.md des Basis-Skills; die gemeinsamen
+    Referenzen und der Renderer liegen in der Stellenanpassungs-Version, nur der Fragenkatalog
+    des Basis-Skills kommt zusätzlich aus dessen eigenem Ordner."""
+    if not _basis(e):
+        teile = [(SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")]
+        teile += [f"\n\n===== {d} =====\n" + (SKILL_DIR / d).read_text(encoding="utf-8") for d in dateien]
+        return "".join(teile)
+    teile = [(SKILL_DIR_BASIS / "SKILL.md").read_text(encoding="utf-8")]
+    for d in dateien:
+        teile.append(f"\n\n===== {d} (gemeinsame Grundlage) =====\n" + (SKILL_DIR / d).read_text(encoding="utf-8"))
+        eigen = SKILL_DIR_BASIS / d
+        if eigen.exists():
+            teile.append(f"\n\n===== {d} (Basis-Skill, Ergänzung) =====\n" + eigen.read_text(encoding="utf-8"))
     return "".join(teile)
 
 
@@ -323,9 +346,20 @@ def _daten(e: dict) -> str:
     }, ensure_ascii=False, indent=1)
 
 
+def _zielrichtung(e: dict) -> str:
+    """Zielrichtung des Basis-CV: Eingabe des Anwenders, sonst seine Wunschrollen aus dem Profil
+    (nie etwas Erfundenes)."""
+    z = (e.get("zielrichtung") or "").strip()
+    return z or "; ".join(r for r in cv.lade_profil()["beruf"]["wunschrollen"] if r)
+
+
 def _kontext(e: dict) -> str:
-    return (f"{analyse.DATEN_HINWEIS}\nHeutiges Datum: {date.today().strftime('%d.%m.%Y')}\n\n"
-            f"<<<DATEN STELLENANZEIGE\n{e['stelle']['text']}\n>>>\n\n"
+    kopf = f"{analyse.DATEN_HINWEIS}\nHeutiges Datum: {date.today().strftime('%d.%m.%Y')}\n\n"
+    if _basis(e):
+        return (f"{kopf}<<<DATEN ZIELRICHTUNG (keine Stelle, nur Gewichtung und Wortwahl)\n"
+                f"{_zielrichtung(e) or 'keine Angabe: breit und neutral bleiben'}\n>>>\n\n"
+                f"<<<DATEN ANGABEN DES ANWENDERS\n{_daten(e)}\n>>>")
+    return (f"{kopf}<<<DATEN STELLENANZEIGE\n{e['stelle']['text']}\n>>>\n\n"
             f"<<<DATEN ANGABEN DES ANWENDERS\n{_daten(e)}\n>>>")
 
 
@@ -412,6 +446,7 @@ Lose Stichpunkte und unsortierte Tätigkeiten in "notizen" werden zu bewerbungsf
 nach Tätigkeits- und Wirkungsformel. Neue Fakten sind verboten.
 - Jeder Eintrag aus "stationen", "ausbildung" und "extras" trägt seine id als "quelle_id".
 - Ein neuer Block für eine laufende Weiterbildung oder Neuorientierung hat leere "quelle_id".
+{SCHEMA}
 - Alle Stationen bleiben im CV. Ältere ohne Bezug kommen einzeilig in "weitere_stationen".
 - Einträge mit "woertlich": true nicht umformulieren; das Cockpit setzt sie danach selbst ein.
 - Stehen "kenntnisse_woertlich": true, übernimm IT, Zertifikate und Sprachen zeilenweise.
@@ -461,12 +496,45 @@ Antworte AUSSCHLIESSLICH mit JSON:
 {FORM}"""
 
 
+# ---- Basis-Modus (Skill cv-from-little-or-nothing-cockpitversion): keine Stelle ----
+BASIS_RUNDE_PROMPT = RUNDE_PROMPT.replace(
+    """Führe Phase 2 (Stellenanzeige analysieren), Phase 3 (CV-Diagnose) und Phase 4 (fehlende
+Informationen erfragen) aus. Dies ist Fragerunde {RUNDE} von höchstens {MAX}.""",
+    """Es gibt KEINE Stellenanzeige. Führe die Fragerunden der Phasen 3 bis 6 dieses Basis-Skills
+aus (Lücken ab 2 Monaten, Beendigungsgründe, Wirkung und Zahlen je Station mit Substanz,
+Gesamtprüfung). Die Felder des Anwenders gelten als bestätigte Abschnitte. Dies ist Fragerunde
+{RUNDE} von höchstens {MAX}. Die Felder "eckdaten", "muss_kann", "top3" und "keywords" bleiben
+leer; Befunde der Gesamtprüfung stehen in "diagnose".""")
+assert BASIS_RUNDE_PROMPT != RUNDE_PROMPT
+
+BASIS_FORMULIER_PROMPT = FORMULIER_PROMPT.replace(
+    "Baue aus den Angaben den fertigen Lebenslauf für genau diese Stelle.",
+    """Baue aus den Angaben den Basis-Lebenslauf (Phase 8 des Basis-Skills) OHNE Stellenbezug:
+breit, vollständig, ATS-tauglich. Alle Stationen mit Substanz bekommen 2–5 Bullets, ältere oder
+kurze einzeilig in "weitere_stationen". Kernkompetenzen: 8–12 belegte, rollenübergreifende Begriffe.
+Zielrolle für die Neuorientierung (siehe Schema) ist die Zielrichtung der Daten; steht dort
+nichts, gilt die Wunschrolle aus "aus_profil"; sonst „Berufliche Neuorientierung“ ohne Ziel.""")
+assert BASIS_FORMULIER_PROMPT != FORMULIER_PROMPT
+BASIS_FORMULIER_PROMPT = BASIS_FORMULIER_PROMPT.replace(
+    "Analyse aus den vorigen Phasen:\n{ANALYSE}\n\n", "Befunde aus den Fragerunden:\n{ANALYSE}\n\n")
+
+BASIS_PRUEF_PROMPT = PRUEF_PROMPT.replace(
+    """Du führst den Faktencheck aus Phase 6 und den Prüfbericht aus Phase 7 des
+folgenden Skills aus.""", """Du führst Prüfen und Prüfbericht aus Phase 8 des folgenden Basis-Skills aus.""").replace(
+    """Die Stellenanzeige
+   ist keine Quelle.""", """Es gibt keine
+   Stellenanzeige.""").replace(
+    """2. Schreibe "bericht" als Markdown mit den 8 Abschnitten aus Phase 7, kurz und scanbar.""",
+    """2. Schreibe "bericht" als Markdown mit den 7 Abschnitten aus Phase 8, kurz und scanbar.""")
+assert BASIS_PRUEF_PROMPT != PRUEF_PROMPT
+
+
 def _json(x) -> str:
     return json.dumps(x, ensure_ascii=False, indent=1)
 
 
 def _voraussetzungen(e: dict):
-    if len(e["stelle"]["text"].strip()) < 80:
+    if not _basis(e) and len(e["stelle"]["text"].strip()) < 80:
         raise ValueError("Bitte zuerst die Stellenanzeige eintragen (Schritt „Stelle“)")
     g = _gefuellt(e["eingabe"])
     if not g["stationen"] and not g["ausbildung"]:
@@ -478,9 +546,10 @@ def _voraussetzungen(e: dict):
 # ============================================================
 
 def _fragerunde(e: dict) -> dict:
-    prompt = (RUNDE_PROMPT.replace("{SKILL}", _skill_text("references/best-practices-modul4.md",
-                                                          "references/formulierungen.md",
-                                                          "references/fragenkatalog.md"))
+    prompt = ((BASIS_RUNDE_PROMPT if _basis(e) else RUNDE_PROMPT)
+              .replace("{SKILL}", _skill_text(e, "references/best-practices-modul4.md",
+                                              "references/formulierungen.md",
+                                              "references/fragenkatalog.md"))
               .replace("{RUNDE}", str(e["runden"] + 1)).replace("{MAX}", str(MAX_RUNDEN))
               .replace("{MAXF}", str(MAX_FRAGEN)).replace("{FORM}", _json(RUNDE_FORM))
               .replace("{KONTEXT}", _kontext(e)))
@@ -653,8 +722,10 @@ def kp_stichpunkte(daten: dict) -> dict:
 def kp_vorschlaege(daten: dict) -> dict:
     eid = daten.get("id")
     e = _lade(eid)
-    prompt = (VORSCHLAG_PROMPT.replace("{SKILL}", _skill_text("references/formulierungen.md",
+    prompt = (VORSCHLAG_PROMPT.replace("{SKILL}", _skill_text(e, "references/formulierungen.md",
                                                               "references/fragenkatalog.md"))
+              .replace("passend zur Stellenanzeige", "breit, ohne Zielposition" if _basis(e)
+                       else "passend zur Stellenanzeige")
               .replace("{FORM}", _json(VORSCHLAEGE_FORM)).replace("{KONTEXT}", _kontext(e)))
     r = cv.normalisiere(_frage(prompt), VORSCHLAEGE_FORM)
     vorschlaege = {k: [x for x in r[k] if x["aussage"]][:4]
@@ -768,7 +839,7 @@ def _setze_feste_daten(c: dict, e: dict) -> dict:
     c["kurzprofil"] = e["kurzprofil_zeilen"]
     c["abschluss"] = {"ort": p["kontakt"]["ort"], "datum": date.today().strftime("%d.%m.%Y"),
                       "unterschrift": e.get("unterschrift", "")}
-    c["dateizusatz"] = e["stelle"]["firma"]
+    c["dateizusatz"] = "" if _basis(e) else e["stelle"]["firma"]
     if not c["zusatzqualifikationen"]["fuehrerschein"]:
         c["zusatzqualifikationen"]["fuehrerschein"] = p["beruf"]["fuehrerschein"]
     return c
@@ -856,8 +927,9 @@ def _zahlen_warnungen(c: dict, e: dict) -> list[str]:
 
 
 def _faktenregister(e: dict, c: dict) -> str:
-    zeilen = ["# Faktenregister", "", f"Stelle: {e['stelle']['position']}, {e['stelle']['firma']}", "",
-              "## Persönliche Daten (Quelle: Profil)", ""]
+    kopf = (f"Basis-Lebenslauf ohne Stelle. Zielrichtung: {_zielrichtung(e) or 'keine Angabe'}" if _basis(e)
+            else f"Stelle: {e['stelle']['position']}, {e['stelle']['firma']}")
+    zeilen = ["# Faktenregister", "", kopf, "", "## Persönliche Daten (Quelle: Profil)", ""]
     zeilen += [f"- {k}: {v}" for k, v in c["person"].items() if v and k not in ("foto",)]
     g = _gefuellt(e["eingabe"])
     for titel, liste in (("Stationen", g["stationen"]), ("Ausbildung", g["ausbildung"]),
@@ -888,8 +960,10 @@ def formulieren(daten: dict) -> dict:
     keywords = (e["analyse"] or {}).get("keywords") or []
     fehler, c, r, render, hinweise = "", None, None, None, []
     for _ in range(2):
-        prompt = (FORMULIER_PROMPT.replace("{SKILL}", _skill_text("references/best-practices-modul4.md",
-                                                                  "references/formulierungen.md"))
+        prompt = ((BASIS_FORMULIER_PROMPT if _basis(e) else FORMULIER_PROMPT)
+                  .replace("{SCHEMA}", cv.SCHEMA_REGELN)
+                  .replace("{SKILL}", _skill_text(e, "references/best-practices-modul4.md",
+                                                  "references/formulierungen.md"))
                   .replace("{FEHLER}", fehler).replace("{ANALYSE}", _json(e["analyse"]))
                   .replace("{FORM}", _json(FORMULIER_FORM)).replace("{KONTEXT}", _kontext(e)))
         r = cv.normalisiere(_frage(prompt), FORMULIER_FORM)
@@ -946,7 +1020,8 @@ def pruefen(daten: dict) -> dict:
     if not e.get("cv"):
         raise ValueError("Es gibt noch keinen formulierten Lebenslauf")
     kp = e["kurzprofil"]
-    prompt = (PRUEF_PROMPT.replace("{SKILL}", _skill_text("references/best-practices-modul4.md"))
+    prompt = ((BASIS_PRUEF_PROMPT if _basis(e) else PRUEF_PROMPT)
+              .replace("{SKILL}", _skill_text(e, "references/best-practices-modul4.md"))
               .replace("{KP_STATUS}", kp["status"]).replace("{KP_VERWORFEN}", _json(kp["verworfen"]))
               .replace("{KP_FEHLEND}", kp["fehlend"]).replace("{RENDER}", _json(e.get("warnungen")))
               .replace("{ANALYSE}", _json(e["analyse"])).replace("{AENDERUNGEN}", _json(e["aenderungen"]))

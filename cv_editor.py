@@ -126,6 +126,95 @@ def normalisiere(wert, vorlage, tiefe: int = 0):
     return str(wert).strip()[:4000]
 
 
+# ============================================================
+# VERBINDLICHES SCHEMA (Vorgabe der Job-Coach, gilt für jeden Lebenslauf)
+# ============================================================
+# Eine laufende Weiterbildung und die berufliche Neuorientierung stehen in der
+# Berufserfahrung OBEN, zusätzlich bleibt die Weiterbildung in „Ausbildung &
+# Weiterbildung“ (einzeilig). Es gelten immer die echten Zeiträume des Bewerbers.
+#
+#   Berufserfahrung
+#   MM/JJJJ – heute   Weiterbildung zum <Titel>, remote
+#                     Schwerpunkte: <Themen>
+#   MM/JJJJ – heute   Berufliche Neuorientierung, Ziel: Positionierung als <Zielrolle>
+#   MM/JJJJ – MM/JJJJ Positionsbezeichnung, Unternehmen, Ort
+#
+#   Ausbildung und Weiterbildung
+#   MM/JJJJ – heute   <Titel>, <Institution>, <Ort>
+#
+# Lücken über 2 Monate werden mit ihrem Grund als eigener Eintrag benannt
+# (z. B. „Gesundheitliche Auszeit“); den Grund liefert der Bewerber, nie wir.
+
+SCHEMA_REGELN = """VERBINDLICHES SCHEMA FÜR BERUFSERFAHRUNG UND WEITERBILDUNG (Vorgabe der Job-Coach):
+- Eine laufende Weiterbildung steht OBEN in der Berufserfahrung als eigener Eintrag
+  „Weiterbildung zum <Titel>, remote“ mit der Zeile „Schwerpunkte: …“ (aus Lebenslauf
+  und Profil, nichts erfinden). Darunter folgt „Berufliche Neuorientierung, Ziel:
+  Positionierung als <Zielrolle>“ ab dem Ende der letzten Anstellung bis „heute“.
+- Zusätzlich bleibt die Weiterbildung in „Ausbildung & Weiterbildung“, dort nur Titel,
+  Institution, Ort und Zeitraum.
+- Es gelten immer die ECHTEN Zeiträume des Bewerbers, keine Beispieldaten.
+- Lücken über 2 Monate erhalten einen eigenen Eintrag mit dem vom Bewerber genannten
+  Grund (z. B. „Gesundheitliche Auszeit“). Ohne bekannten Grund: Lücke melden, nicht erfinden."""
+
+_HEUTE = re.compile(r"^(heute|aktuell|present)$", re.I)
+_MONAT = re.compile(r"^(\d{1,2})[./](\d{4})$")
+
+
+def _monat_danach(text: str) -> str:
+    m = _MONAT.match(str(text or "").strip())
+    if not m:
+        return ""
+    mo, jahr = int(m.group(1)), int(m.group(2))
+    mo += 1
+    if mo > 12:
+        mo, jahr = 1, jahr + 1
+    return f"{mo:02d}/{jahr}"
+
+
+def _monate_wert(text: str) -> int:
+    m = _MONAT.match(str(text or "").strip())
+    return int(m.group(2)) * 12 + int(m.group(1)) if m else -1
+
+
+def _zielrolle(rolle: str) -> str:
+    r = re.sub(r"\((?:gn|m/w/d|w/m/d|m/f/d|gn\*?)\)", "", rolle or "", flags=re.I)
+    return re.sub(r"\s+", " ", r).strip(" ,-–")
+
+
+def wende_schema_an(c: dict) -> dict:
+    """Setzt das verbindliche Schema (siehe oben) auf einen Lebenslauf der
+    Cockpit-Form um. Idempotent: vorhandene Einträge bleiben unangetastet.
+    Ohne laufende Weiterbildung in „bildung“ passiert nichts."""
+    erf, bil = c.setdefault("erfahrung", []), c.get("bildung", [])
+    hat_wb = any(str(e.get("rolle", "")).startswith("Weiterbildung zu") for e in erf)
+    hat_neu = any(str(e.get("rolle", "")).startswith("Berufliche Neuorientierung") for e in erf)
+    wb = next((b for b in bil if _HEUTE.match(str(b.get("ende", "")).strip())
+               and re.match(r"^Weiterbildung\b", str(b.get("abschluss", "")), re.I)), None)
+    if wb and not hat_wb:
+        titel = re.sub(r"^Weiterbildung\s+(zum|zur|zu)?\s*", "", wb["abschluss"], flags=re.I).strip() or wb["abschluss"]
+        remote = ", remote" if "remote" in str(wb.get("ort", "")).lower() else ""
+        themen = [re.sub(r"[.\s]+$", "", p) for p in wb.get("punkte", [])
+                  if not re.match(r"^(Beginn|Vorbereitung|Zertifizierung)", p)][:2]
+        erf.append({"rolle": f"Weiterbildung zum {titel}{remote}", "firma": "", "ort": "",
+                    "start": wb.get("start", ""), "ende": "heute",
+                    "punkte": ([f"Schwerpunkte: {'; '.join(themen)}."] if themen else [])})
+        wb["abschluss"] = titel
+        wb["punkte"] = [p for p in wb.get("punkte", [])
+                        if re.match(r"^(Vorbereitung|Zertifizierung)", p)]
+        hat_wb = True
+    if hat_wb and not hat_neu:
+        regulaer = [e for e in erf if not str(e.get("rolle", "")).startswith(("Weiterbildung zu", "Gesundheitliche"))
+                  and not _HEUTE.match(str(e.get("ende", "")).strip())]
+        letztes = max((e.get("ende", "") for e in regulaer), key=_monate_wert, default="")
+        start = _monat_danach(letztes)
+        if start:
+            ziel = _zielrolle((c.get("zielstelle") or {}).get("rolle", ""))
+            erf.append({"rolle": "Berufliche Neuorientierung, Ziel: Positionierung als "
+                                 + (ziel or "Berater im digitalen Vertrieb"),
+                        "firma": "", "ort": "", "start": start, "ende": "heute", "punkte": []})
+    return c
+
+
 def _nicht_leer(v) -> bool:
     return bool(v) if not isinstance(v, (dict, list)) else bool(v)
 

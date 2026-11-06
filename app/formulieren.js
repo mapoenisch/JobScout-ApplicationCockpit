@@ -1,5 +1,5 @@
 /* JobScout Cockpit – Ebene „CV neu formulieren“ des Lebenslauf-Editors.
-   Führt den Skill skills/lebenslauf-cockpit im Cockpit aus (Backend: cv_formulieren.py).
+   Führt den Skill skills/lebenslauf-stellenanpassung-cockpitversion im Cockpit aus (Backend: cv_formulieren.py).
    Nutzt die Helfer aus app.js und lebenslauf.js (feld, verdrahteEingaben,
    verdrahteListen, eintragKopf, addKnopf, ladeCv, alsBase64, skaliereVorschau …). */
 "use strict";
@@ -9,13 +9,19 @@ const FO = { e: null, schritt: 0, liste: null, arbeit: "", vorschauTimer: null, 
 
 const FO_SCHRITTE = [["stelle", "Stelle"], ["profil", "Profil"], ["erfahrung", "Erfahrung"], ["bildung", "Bildung"],
   ["extras", "Kenntnisse"], ["fragen", "Fragen"], ["kurzprofil", "Kurzprofil"], ["ergebnis", "Ergebnis"]];
+/* Basis-CV (Skill cv-from-little-or-nothing-cockpitversion): gleiche Schritte, aber „Zielrichtung“ statt „Stelle“ */
+const FO_SCHRITTE_BASIS = FO_SCHRITTE.map((s, i) => (i === 0 ? ["ziel", "Zielrichtung"] : s));
+const foBasis = () => FO.e?.modus === "basis";
+const foSchritte = () => (foBasis() ? FO_SCHRITTE_BASIS : FO_SCHRITTE);
 const FO_TEXT = {
   stelle: "Für diese Stelle wird der Lebenslauf geschrieben. Die Anzeige liefert nur Wortwahl und Schwerpunkte, nie Fakten über dich.",
+  ziel: "Ein Basis-Lebenslauf gehört zu keiner Stelle. Die Zielrichtung ist optional und steuert nur Gewichtung und Wortwahl, nie Inhalte. Leer gelassen, gelten deine Wunschrollen aus dem Profil.",
   profil: "Deine persönlichen Daten kommen aus dem Profil. Änderungen hier werden dort mitgespeichert.",
   erfahrung: "Lose Wortgruppen und unsortierte Tätigkeiten reichen. Daraus entstehen fertige Formulierungen. Eigene Texte bleiben mit „Wörtlich“ unverändert.",
   bildung: "Ausbildung, Studium, Weiterbildung und Schulabschluss.",
   extras: "IT, Zertifikate, Sprachen sowie Projekte oder Ehrenamt, gern als grobe Liste.",
   fragen: "Der Abgleich mit der Stelle zeigt, was fehlt. Nur was du hier beantwortest, kommt als Fakt in den Lebenslauf.",
+  fragen_basis: "Claude prüft deine Angaben auf Lücken, fehlende Gründe und fehlende Wirkung. Nur was du hier beantwortest, kommt als Fakt in den Lebenslauf.",
   kurzprofil: "Optional. Drei bis vier belegte Zeilen ganz oben im Lebenslauf.",
   ergebnis: "Der fertige Lebenslauf. Kurzprofil, Punkte und Kernkompetenzen kannst du hier noch ändern.",
 };
@@ -36,7 +42,7 @@ async function renderFormulieren() {
 
 function foUebersicht() {
   FO.e = null;
-  setHeader("Lebenslauf-Editor", "Aus Stichpunkten oder einem Entwurf entsteht ein bewerbungsfertiger Lebenslauf für genau eine Stelle");
+  setHeader("Lebenslauf-Editor", "Aus Stichpunkten oder einem Entwurf entsteht ein bewerbungsfertiger Lebenslauf, für eine Stelle oder als Basis-CV");
   $("#view").innerHTML = `${ebenenLeiste("neu")}
     ${FO.claude ? "" : `<div class="hinweis">${ICON.bell}<div>Claude Code wurde nicht gefunden. Formulieren und Rückfragen brauchen <code>claude</code>.</div></div>`}
     <div class="fo-start">
@@ -44,11 +50,13 @@ function foUebersicht() {
         <p>Vorhandenen Lebenslauf hochladen oder aus dem ATS-Editor holen und auf die Stelle zuschneiden.</p></button>
       <button class="card" data-fo-neu="neu"><h2>${ICON.spark}Von Grund auf neu formulieren</h2>
         <p>Alles in Felder eintragen, gern als lose Stichpunkte. Eigene Formulierungen kannst du wörtlich übernehmen.</p></button>
+      <button class="card" data-fo-neu="basis"><h2>${ICON.spark}Basis-CV erstellen</h2>
+        <p>Ohne Stelle: ein vollständiger, ehrlicher Lebenslauf aus deinen Angaben und Rückfragen, als Grundlage für spätere Bewerbungen.</p></button>
     </div>
     ${FO.entwuerfe.length ? `<div class="vorschau-titel">Deine Entwürfe</div><div class="an-karten">${FO.entwuerfe.map((x) => `
       <div class="card an-fall" data-fo-oeffnen="${esc(x.id)}">
         <div class="an-fall-kopf"><div class="zeile-main"><b>${esc(x.position || "Noch keine Stelle")}</b>
-          <div class="muted small">${esc(x.firma || (x.modus === "neu" ? "Von Grund auf neu" : "Entwurf umformulieren"))}</div></div>
+          <div class="muted small">${esc(x.firma || ({ neu: "Von Grund auf neu", basis: "Basis-CV ohne Stelle" }[x.modus] || "Entwurf umformulieren"))}</div></div>
           ${x.fertig ? '<span class="chip ok">Formuliert</span>' : '<span class="chip">In Arbeit</span>'}</div>
         <div class="an-fall-fuss"><span class="muted small">${fmtDatum(x.geaendert)}</span>
           <button class="icon-btn mini klein" style="margin-left:auto" data-fo-loeschen="${esc(x.id)}" title="Entwurf löschen">${ICON.trash}</button></div>
@@ -78,7 +86,7 @@ function foOeffne(e) {
   const gleicher = FO.e?.id === e.id;
   FO.e = e;
   if (!gleicher) { FO.schritt = 0; FO.cvGeaendert = false; }
-  setHeader("Lebenslauf-Editor", e.stelle.position ? `Für: ${e.stelle.position}${e.stelle.firma ? `, ${e.stelle.firma}` : ""}` : "Neuer Lebenslauf für eine konkrete Stelle",
+  setHeader("Lebenslauf-Editor", foBasis() ? "Basis-CV ohne Stelle" : e.stelle.position ? `Für: ${e.stelle.position}${e.stelle.firma ? `, ${e.stelle.firma}` : ""}` : "Neuer Lebenslauf für eine konkrete Stelle",
     `<span class="chip ok" id="cv-status">Gespeichert</span>
      <a class="btn" href="#formulieren">Alle Entwürfe</a>
      <button class="btn btn-primary" id="fo-pdf">${ICON_CV.download}PDF speichern</button>`);
@@ -89,7 +97,7 @@ function foOeffne(e) {
         <div class="zeile-main"><b id="fo-name"></b><span class="muted small" id="fo-stand"></span></div>
         <div class="balken"><span id="fo-balken"></span></div>
       </div>
-      <div class="cv-schritte fo" role="tablist">${FO_SCHRITTE.map(([, name], i) =>
+      <div class="cv-schritte fo" role="tablist">${foSchritte().map(([, name], i) =>
         `<button type="button" data-fo-schritt="${i}" role="tab">${i + 1}. ${name}</button>`).join("")}</div>
       <div id="fo-inhalt" class="card cv-inhalt"></div>
       <div class="cv-nav"><button class="btn" id="fo-zurueck">Zurück</button><button class="btn btn-primary" id="fo-weiter"></button></div>
@@ -121,7 +129,7 @@ function foOeffne(e) {
 }
 
 function foGehe(i) {
-  if (i < 0 || i >= FO_SCHRITTE.length) return;
+  if (i < 0 || i >= foSchritte().length) return;
   FO.schritt = i;
   foZeichne();
   window.scrollTo(0, 0);
@@ -136,7 +144,7 @@ function foIds() {
 async function foSpeichern() {
   foIds();
   const e = FO.e;
-  const teile = { id: e.id, stelle: e.stelle, eingabe: e.eingabe, persoenlich: e.persoenlich, kurzprofil_zeilen: e.kurzprofil_zeilen };
+  const teile = { id: e.id, stelle: e.stelle, zielrichtung: e.zielrichtung || "", eingabe: e.eingabe, persoenlich: e.persoenlich, kurzprofil_zeilen: e.kurzprofil_zeilen };
   if (FO.cvGeaendert) teile.cv = e.cv;
   await api("/api/formulieren/speichern", teile);
   FO.cvGeaendert = false;
@@ -162,12 +170,12 @@ async function foAktion(name, daten, text) {
 
 function foKopfNeu() {
   const s = FO.e.stelle;
-  if (s.position) $("#view-sub").textContent = `Für: ${s.position}${s.firma ? `, ${s.firma}` : ""}`;
+  if (!foBasis() && s.position) $("#view-sub").textContent = `Für: ${s.position}${s.firma ? `, ${s.firma}` : ""}`;
 }
 
 function foStand() {
   const e = FO.e;
-  const teile = [e.stelle.text.trim().length >= 80, CV.profil.persoenlich.vorname && CV.profil.kontakt.email,
+  const teile = [foBasis() || e.stelle.text.trim().length >= 80, CV.profil.persoenlich.vorname && CV.profil.kontakt.email,
     e.eingabe.stationen.length, e.eingabe.ausbildung.length, e.eingabe.it || e.eingabe.sprachen, e.fragen_fertig,
     e.kurzprofil.status !== "offen", e.cv, e.bericht];
   return Math.round((teile.filter(Boolean).length / teile.length) * 100);
@@ -184,16 +192,16 @@ function foFortschritt() {
 function foZeichne() {
   const box = $("#fo-inhalt");
   if (!box) return;
-  const [id, name] = FO_SCHRITTE[FO.schritt];
+  const [id, name] = foSchritte()[FO.schritt];
   $$("[data-fo-schritt]").forEach((b) => b.classList.toggle("an", +b.dataset.foSchritt === FO.schritt));
-  box.innerHTML = `<div class="schritt-kopf"><h2>${name}</h2><span class="muted small">Schritt ${FO.schritt + 1} von ${FO_SCHRITTE.length}</span></div>
-    <p class="abschnitt-text">${FO_TEXT[id]}</p>
+  box.innerHTML = `<div class="schritt-kopf"><h2>${name}</h2><span class="muted small">Schritt ${FO.schritt + 1} von ${foSchritte().length}</span></div>
+    <p class="abschnitt-text">${foBasis() && FO_TEXT[`${id}_basis`] || FO_TEXT[id]}</p>
     ${FO.arbeit ? `<div class="fo-arbeit"><span class="spinner"></span><div>${esc(FO.arbeit)}</div></div>` : ""}
     ${FO_RENDER[id]()}`;
   $("#fo-zurueck").disabled = FO.schritt === 0;
-  const letzter = FO.schritt === FO_SCHRITTE.length - 1;
+  const letzter = FO.schritt === foSchritte().length - 1;
   $("#fo-weiter").style.display = letzter ? "none" : "";
-  if (!letzter) $("#fo-weiter").textContent = `Weiter: ${FO_SCHRITTE[FO.schritt + 1][1]}`;
+  if (!letzter) $("#fo-weiter").textContent = `Weiter: ${foSchritte()[FO.schritt + 1][1]}`;
   $("#fo-pdf").disabled = !FO.e.cv;
   foFortschritt();
 }
@@ -224,6 +232,19 @@ const FO_RENDER = {
         <input type="url" id="fo-url" placeholder="oder Link zur Anzeige" value="${esc(e.stelle.url)}" style="flex:1;min-width:180px">
         ${foKnopf("data-fo-url", "Laden", "btn")}
         <label class="btn">${ICON_CV.upload}Datei<input type="file" id="fo-stelle-datei" accept=".pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" hidden></label>
+      </div>`;
+  },
+  ziel() {
+    const e = FO.e;
+    return `<div class="form-grid">
+        ${feld("f", "zielrichtung", "Zielrichtung (optional)", { voll: true, zeilen: 3, ph: "z. B. Vertriebsinnendienst, SDR, Customer Success. Leer: deine Wunschrollen aus dem Profil" })}
+      </div>
+      <div class="card-innen" style="margin-top:12px">
+        <div class="abschnitt-kopf"><h2>Vorhandene Unterlagen</h2><span class="muted small" style="margin-left:auto">optional</span></div>
+        <p class="abschnitt-text">Alte Lebensläufe, Zeugnisse oder Notizen füllen nur die Felder der nächsten Schritte vor. Du prüfst und korrigierst dort alles selbst. Dein Profil und der ATS-Editor bleiben unverändert.</p>
+        <label class="dropzone klein">${ICON_CV.upload}<span><b>Unterlagen wählen</b> – PDF, Word, Markdown oder Bild</span>
+          <input type="file" id="fo-cv-datei" accept=".pdf,.docx,.doc,.md,.txt,.png,.jpg,.jpeg" multiple hidden ${foGesperrt()}></label>
+        ${foKnopf("data-fo-aus-editor", `${ICON.refresh}Aus dem ATS-Editor holen`, "btn-soft")}
       </div>`;
   },
   profil() {
@@ -299,15 +320,15 @@ const FO_RENDER = {
   },
   fragen() {
     const e = FO.e, a = e.analyse;
-    if (!a) return `<div class="leer"><p>Wenn Stelle und Felder ausgefüllt sind, prüft Claude alles gegen die Anzeige und fragt nur, was wirklich fehlt.</p>
-      ${foKnopf("data-fo-analysieren", `${ICON.spark}Mit der Stelle abgleichen`)}</div>`;
+    if (!a) return `<div class="leer"><p>${foBasis() ? "Wenn die Felder ausgefüllt sind, prüft Claude sie auf Lücken und fragt nur, was wirklich fehlt." : "Wenn Stelle und Felder ausgefüllt sind, prüft Claude alles gegen die Anzeige und fragt nur, was wirklich fehlt."}</p>
+      ${foKnopf("data-fo-analysieren", `${ICON.spark}${foBasis() ? "Angaben prüfen" : "Mit der Stelle abgleichen"}`)}</div>`;
     const offen = e.fragen.length ? `${e.fragen.map(foFrageKarte).join("")}
         <div class="knopf-reihe">${foKnopf("data-fo-antworten", "Antworten absenden")}${foKnopf("data-fo-fragen-ende", "Rest überspringen", "btn")}</div>
         <p class="muted small">Unbeantwortetes wird weggelassen und im Prüfbericht als Lücke genannt. Größenordnungen reichen, aber nur, was du im Gespräch erklären kannst.</p>`
       : `<div class="hinweis info">${ICON.spark}<div>Rückfragen abgeschlossen${e.antworten.length ? `, ${e.antworten.length} Antworten übernommen` : ""}.</div>
         <button type="button" class="btn btn-sm" style="margin-left:auto" data-fo-gehe="6">Weiter zum Kurzprofil</button></div>`;
     return `${offen}${foAnalyseHtml(a)}
-      <div class="knopf-reihe" style="margin-top:12px">${foKnopf("data-fo-analysieren", `${ICON.refresh}Neu abgleichen`, "btn")}</div>`;
+      <div class="knopf-reihe" style="margin-top:12px">${foKnopf("data-fo-analysieren", `${ICON.refresh}${foBasis() ? "Neu prüfen" : "Neu abgleichen"}`, "btn")}</div>`;
   },
   kurzprofil() {
     const e = FO.e, kp = e.kurzprofil;
@@ -362,7 +383,8 @@ function foPruefungHtml() {
 }
 
 function foAnalyseHtml(a) {
-  return `<details class="card-innen" style="margin-top:12px"><summary><b>Abgleich mit der Stelle</b>${a.eckdaten.rollentyp ? ` <span class="chip neu">${esc(a.eckdaten.rollentyp)}</span>` : ""}</summary>
+  if (foBasis() && !a.diagnose.length) return "";
+  return `<details class="card-innen" style="margin-top:12px"><summary><b>${foBasis() ? "Befunde der Prüfung" : "Abgleich mit der Stelle"}</b>${a.eckdaten.rollentyp ? ` <span class="chip neu">${esc(a.eckdaten.rollentyp)}</span>` : ""}</summary>
     ${a.top3.length ? `<div class="an-h">Top-3-Aufgaben</div><ol class="an-liste">${a.top3.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
     ${a.muss_kann.length ? `<div class="an-h">Muss und Kann</div><div class="an-wahl">${a.muss_kann.map((m) => `<div class="ats-regel"><div class="ats-zeile"><span>${esc(m.anforderung)}</span><span class="chip ${/^ja/i.test(m.eignung) ? "ok" : /^nein/i.test(m.eignung) ? "bad" : "warn"}">${esc(m.art)}: ${esc(m.eignung)}</span></div>${m.beleg ? `<div class="muted small">${esc(m.beleg)}</div>` : ""}</div>`).join("")}</div>` : ""}
     ${a.diagnose.length ? `<div class="an-h">Befunde im Entwurf</div><ul class="an-liste">${a.diagnose.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
@@ -418,7 +440,7 @@ async function foKlick(ev) {
     if (!url) return toast("Bitte einen Link eintragen", true);
     if (await foAktion("stelle", { url }, "Liest die Anzeige …")) toast("Anzeige übernommen");
   } else if (ds.foAnalysieren !== undefined) {
-    await foAktion("analysieren", {}, "Claude gleicht deine Angaben mit der Stelle ab … das dauert meist 1–2 Minuten.");
+    await foAktion("analysieren", {}, foBasis() ? "Claude prüft deine Angaben auf Lücken … das dauert meist 1–2 Minuten." : "Claude gleicht deine Angaben mit der Stelle ab … das dauert meist 1–2 Minuten.");
   } else if (ds.foAntworten !== undefined) {
     await foAktion("antworten", { antworten: foAntwortenLesen(box) }, "Claude wertet deine Antworten aus …");
   } else if (ds.foFragenEnde !== undefined) {
