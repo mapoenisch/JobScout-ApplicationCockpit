@@ -1,6 +1,6 @@
 # Best Practices Lebenslauf – Destillat aus DBA Modul 4
 
-Quellen (Ordner `~/Projekte/Jobsuche 2026/Modul 4 – Arbeitsmarktvorbereitung`):
+Quellen (Original: `~/Documents/DBA Batch 8/4. Modul – Arbeitsmarktvorbereitung`; md-Kopie: `~/Projekte/Jobsuche 2026/4. Modul – Arbeitsmarktvorbereitung`):
 - **[T1]** 4.1.1 CV Tag 1 – CV Basics (Task Sheet, Musterbeispiel, Präsentation „CV Feedback – Top 10“)
 - **[T2a]** 4.1.3 CV Tag 2 – Lücken (Task Sheet + Präsentation „Wachstum“)
 - **[T2b]** 4.1.3 CV Tag 2 – Stellenanzeige (Task Sheet Muss/Kann + Eignung)

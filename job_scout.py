@@ -240,6 +240,12 @@ BA_HEADERS = {"X-API-Key": "jobboerse-jobsuche"}  # öffentlicher Key der BA
 # Der Detail-Endpoint (jobdetails) blieb auf v4 und lieferte weiter 200 -- nur der
 # Such-Endpoint gab mit den alten Feldern/URL einen 403 zurück.
 
+# Der frühere Filter arbeitszeit=ho liefert in v6 ohne Fehlermeldung 0 Treffer.
+# prozentual_100 = nur Stellen mit 100 % Homeoffice. Die bundesweite Suche soll
+# keine Hybrid-Stellen liefern; dafür gibt es die Suche rund um den Wunschort.
+# Breiter wäre "prozentual_0;nv_true" (beliebiger Anteil, auch "nach Vereinbarung").
+BA_HOMEOFFICE_FILTER = "prozentual_100"
+
 
 def fetch_arbeitsagentur(was: str, wo: str | None, umkreis: int | None,
                          nur_remote: bool = False, max_seiten: int = 3) -> list[Job]:
@@ -256,7 +262,7 @@ def fetch_arbeitsagentur(was: str, wo: str | None, umkreis: int | None,
             params["wo"] = wo
             params["umkreis"] = umkreis or 25
         if nur_remote:
-            params["arbeitszeit"] = "ho"  # Homeoffice-Filter der BA
+            params["homeoffice"] = BA_HOMEOFFICE_FILTER
 
         try:
             r = requests.get(BA_URL, headers=BA_HEADERS, params=params, timeout=15)
@@ -283,7 +289,7 @@ def fetch_arbeitsagentur(was: str, wo: str | None, umkreis: int | None,
                 veroeffentlicht=a.get("datumErsteVeroeffentlichung", ""),
                 url=f"https://www.arbeitsagentur.de/jobsuche/jobdetail/{ref}",
                 quelle="Arbeitsagentur",
-                remote=nur_remote,
+                remote=nur_remote or bool(a.get("homeofficemoeglich")),
             ))
     return jobs
 
