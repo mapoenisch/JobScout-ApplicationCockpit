@@ -41,3 +41,6 @@ analyse/
 
 # Entwürfe der Ebene „CV neu formulieren“ (persönliche Daten)
 formulieren/
+
+# Monatliche Kursempfehlungen aus dem Skill-Radar (persönliche Skill-Lücken)
+kurs_empfehlungen_*.md
